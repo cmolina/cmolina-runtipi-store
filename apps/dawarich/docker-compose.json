@@ -24,8 +24,6 @@
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
       "command": ["bin/rails", "server", "-p", "3000", "-b", "::"],
-      "stdinOpen": true,
-      "tty": true,
       "environment": [
         { "key": "RAILS_ENV", "value": "production" },
         { "key": "REDIS_URL", "value": "redis://dawarich_redis:6379" },
@@ -50,8 +48,6 @@
       "isMain": false,
       "entrypoint": "sidekiq-entrypoint.sh",
       "command": ["sidekiq"],
-      "stdinOpen": true,
-      "tty": true,
       "environment": [
         { "key": "RAILS_ENV", "value": "production" },
         { "key": "REDIS_URL", "value": "redis://dawarich_redis:6379" },
