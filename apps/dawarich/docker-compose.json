@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 2,
+  "$schema": "https://schemas.runtipi.io/dynamic-compose.json",
+  "services": [
+    {
+      "name": "dawarich_redis",
+      "image": "redis:7.4-alpine",
+      "isMain": false
+    },
+    {
+      "name": "dawarich_db",
+      "image": "postgis/postgis:17-3.5-alpine",
+      "isMain": false,
+      "environment": [
+        { "key": "POSTGRES_USER", "value": "postgres" },
+        { "key": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}" },
+        { "key": "POSTGRES_DB", "value": "dawarich_production" }
+      ]
+    },
+    {
+      "name": "dawarich_app",
+      "image": "freikin/dawarich:latest",
+      "isMain": true,
+      "internalPort": 3000,
+      "environment": [
+        { "key": "RAILS_ENV", "value": "production" },
+        { "key": "REDIS_URL", "value": "redis://dawarich_redis:6379" },
+        { "key": "DATABASE_HOST", "value": "dawarich_db" },
+        { "key": "DATABASE_PORT", "value": "5432" },
+        { "key": "DATABASE_USERNAME", "value": "postgres" },
+        { "key": "DATABASE_PASSWORD", "value": "${POSTGRES_PASSWORD}" },
+        { "key": "DATABASE_NAME", "value": "dawarich_production" },
+        { "key": "APPLICATION_HOSTS", "value": "${APPLICATION_HOSTS}" },
+        { "key": "TIME_ZONE", "value": "${TIME_ZONE}" },
+        { "key": "APPLICATION_PROTOCOL", "value": "https" },
+        { "key": "SECRET_KEY_BASE", "value": "${SECRET_KEY_BASE}" },
+        { "key": "RAILS_LOG_TO_STDOUT", "value": "true" },
+        { "key": "SELF_HOSTED", "value": "true" },
+        { "key": "STORE_GEODATA", "value": "true" }
+      ],
+      "dependsOn": ["dawarich_db", "dawarich_redis"]
+    },
+    {
+      "name": "dawarich_sidekiq",
+      "image": "freikin/dawarich:latest",
+      "isMain": false,
+      "environment": [
+        { "key": "RAILS_ENV", "value": "production" },
+        { "key": "REDIS_URL", "value": "redis://dawarich_redis:6379" },
+        { "key": "DATABASE_HOST", "value": "dawarich_db" },
+        { "key": "DATABASE_PORT", "value": "5432" },
+        { "key": "DATABASE_USERNAME", "value": "postgres" },
+        { "key": "DATABASE_PASSWORD", "value": "${POSTGRES_PASSWORD}" },
+        { "key": "DATABASE_NAME", "value": "dawarich_production" },
+        { "key": "APPLICATION_HOSTS", "value": "${APPLICATION_HOSTS}" },
+        { "key": "BACKGROUND_PROCESSING_CONCURRENCY", "value": "10" },
+        { "key": "APPLICATION_PROTOCOL", "value": "https" },
+        { "key": "SECRET_KEY_BASE", "value": "${SECRET_KEY_BASE}" },
+        { "key": "RAILS_LOG_TO_STDOUT", "value": "true" },
+        { "key": "SELF_HOSTED", "value": "true" },
+        { "key": "STORE_GEODATA", "value": "true" }
+      ],
+      "dependsOn": ["dawarich_db", "dawarich_redis", "dawarich_app"]
+    }
+  ]
+}
