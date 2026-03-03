@@ -1,6 +1,5 @@
 {
   "schemaVersion": 2,
-  "$schema": "https://schemas.runtipi.io/dynamic-compose.json",
   "services": [
     {
       "name": "dawarich_redis",
@@ -19,11 +18,11 @@
     },
     {
       "name": "dawarich_app",
-      "image": "freikin/dawarich:latest",
+      "image": "freikin/dawarich:1.3.1",
       "isMain": true,
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
-      "command": ["bin/rails", "server", "-p", "3000", "-b", "::"],
+      "command": ["bash", "-c", "bundle exec rails runner 'email = ENV[\"ADMIN_EMAIL\"].to_s.strip; password = ENV[\"ADMIN_PASSWORD\"].to_s.strip; if email.present? && password.present?; User.create!(email: email, password: password, password_confirmation: password, admin: true, status: :active, active_until: 100.years.from_now) unless User.exists?(email: email); User.find_by(email: \"demo@dawarich.app\")&.destroy!; end' && exec bin/rails server -p 3000 -b ::"],
       "stdinOpen": true,
       "tty": true,
       "environment": [
@@ -38,6 +37,8 @@
         { "key": "TIME_ZONE", "value": "${TIME_ZONE}" },
         { "key": "APPLICATION_PROTOCOL", "value": "http" },
         { "key": "SECRET_KEY_BASE", "value": "${SECRET_KEY_BASE}" },
+        { "key": "ADMIN_EMAIL", "value": "${ADMIN_EMAIL}" },
+        { "key": "ADMIN_PASSWORD", "value": "${ADMIN_PASSWORD}" },
         { "key": "RAILS_LOG_TO_STDOUT", "value": "true" },
         { "key": "SELF_HOSTED", "value": "true" },
         { "key": "STORE_GEODATA", "value": "true" }
@@ -46,7 +47,7 @@
     },
     {
       "name": "dawarich_sidekiq",
-      "image": "freikin/dawarich:latest",
+      "image": "freikin/dawarich:1.3.1",
       "isMain": false,
       "entrypoint": "sidekiq-entrypoint.sh",
       "command": ["sidekiq"],
