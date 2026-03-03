@@ -19,8 +19,7 @@
     { "type": "password", "label": "Admin Password", "env_variable": "ADMIN_PASSWORD", "required": true, "min": 8, "hint": "Password for your admin account" },
     { "type": "random", "label": "Database Password", "env_variable": "POSTGRES_PASSWORD", "required": true, "min": 32 },
     { "type": "random", "label": "Secret Key Base", "env_variable": "SECRET_KEY_BASE", "required": true, "min": 64, "encoding": "hex" },
-    { "type": "text", "label": "Time Zone", "env_variable": "TIME_ZONE", "default": "Europe/London", "required": false, "hint": "e.g., Europe/London, America/New_York, UTC" },
-    { "type": "text", "label": "Application Hosts", "env_variable": "APPLICATION_HOSTS", "required": true, "hint": "Domain(s) where Dawarich will be accessible (comma separated)", "placeholder": "dawarich.example.com" }
+    { "type": "text", "label": "Time Zone", "env_variable": "TIME_ZONE", "default": "Europe/London", "required": false, "hint": "e.g., Europe/London, America/New_York, UTC" }
   ],
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
