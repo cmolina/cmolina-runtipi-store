@@ -19,7 +19,14 @@
     { "type": "password", "label": "Admin Password", "env_variable": "ADMIN_PASSWORD", "required": true, "min": 8, "hint": "Password for your admin account" },
     { "type": "random", "label": "Database Password", "env_variable": "POSTGRES_PASSWORD", "required": true, "min": 32 },
     { "type": "random", "label": "Secret Key Base", "env_variable": "SECRET_KEY_BASE", "required": true, "min": 64, "encoding": "hex" },
-    { "type": "text", "label": "Time Zone", "env_variable": "TIME_ZONE", "default": "Europe/London", "required": false, "hint": "e.g., Europe/London, America/New_York, UTC" }
+    { "type": "text", "label": "Time Zone", "env_variable": "TIME_ZONE", "default": "Europe/London", "required": false, "hint": "e.g., Europe/London, America/New_York, UTC" },
+    { "type": "text", "label": "Photon API Host", "env_variable": "PHOTON_API_HOST", "required": false, "hint": "Custom Photon API host for self-hosted reverse geocoding" },
+    { "type": "password", "label": "Photon API Key", "env_variable": "PHOTON_API_KEY", "required": false, "hint": "Photon API key (e.g., from Dawarich Patreon)" },
+    { "type": "boolean", "label": "Photon API Use HTTPS", "env_variable": "PHOTON_API_USE_HTTPS", "default": false, "required": false, "hint": "Use HTTPS for Photon API requests" },
+    { "type": "password", "label": "Geoapify API Key", "env_variable": "GEOAPIFY_API_KEY", "required": false, "hint": "API key for Geoapify reverse geocoding service" },
+    { "type": "text", "label": "Nominatim API Host", "env_variable": "NOMINATIM_API_HOST", "required": false, "hint": "Custom Nominatim API host for self-hosted reverse geocoding" },
+    { "type": "password", "label": "Nominatim API Key", "env_variable": "NOMINATIM_API_KEY", "required": false, "hint": "API key for Nominatim reverse geocoding service" },
+    { "type": "boolean", "label": "Nominatim API Use HTTPS", "env_variable": "NOMINATIM_API_USE_HTTPS", "default": true, "required": false, "hint": "Use HTTPS for Nominatim API requests" }
   ],
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
