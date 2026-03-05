@@ -41,7 +41,14 @@
         { "key": "ADMIN_PASSWORD", "value": "${ADMIN_PASSWORD}" },
         { "key": "RAILS_LOG_TO_STDOUT", "value": "true" },
         { "key": "SELF_HOSTED", "value": "true" },
-        { "key": "STORE_GEODATA", "value": "true" }
+        { "key": "STORE_GEODATA", "value": "true" },
+        { "key": "PHOTON_API_HOST", "value": "${PHOTON_API_HOST}" },
+        { "key": "PHOTON_API_KEY", "value": "${PHOTON_API_KEY}" },
+        { "key": "PHOTON_API_USE_HTTPS", "value": "${PHOTON_API_USE_HTTPS}" },
+        { "key": "GEOAPIFY_API_KEY", "value": "${GEOAPIFY_API_KEY}" },
+        { "key": "NOMINATIM_API_HOST", "value": "${NOMINATIM_API_HOST}" },
+        { "key": "NOMINATIM_API_KEY", "value": "${NOMINATIM_API_KEY}" },
+        { "key": "NOMINATIM_API_USE_HTTPS", "value": "${NOMINATIM_API_USE_HTTPS}" }
       ],
       "dependsOn": ["dawarich_db", "dawarich_redis"]
     },
@@ -67,7 +74,14 @@
         { "key": "SECRET_KEY_BASE", "value": "${SECRET_KEY_BASE}" },
         { "key": "RAILS_LOG_TO_STDOUT", "value": "true" },
         { "key": "SELF_HOSTED", "value": "true" },
-        { "key": "STORE_GEODATA", "value": "true" }
+        { "key": "STORE_GEODATA", "value": "true" },
+        { "key": "PHOTON_API_HOST", "value": "${PHOTON_API_HOST}" },
+        { "key": "PHOTON_API_KEY", "value": "${PHOTON_API_KEY}" },
+        { "key": "PHOTON_API_USE_HTTPS", "value": "${PHOTON_API_USE_HTTPS}" },
+        { "key": "GEOAPIFY_API_KEY", "value": "${GEOAPIFY_API_KEY}" },
+        { "key": "NOMINATIM_API_HOST", "value": "${NOMINATIM_API_HOST}" },
+        { "key": "NOMINATIM_API_KEY", "value": "${NOMINATIM_API_KEY}" },
+        { "key": "NOMINATIM_API_USE_HTTPS", "value": "${NOMINATIM_API_USE_HTTPS}" }
       ],
       "dependsOn": ["dawarich_db", "dawarich_redis", "dawarich_app"]
     }
