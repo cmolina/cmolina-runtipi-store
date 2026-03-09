@@ -16,7 +16,7 @@ Libation needs your Audible account credentials to work. You must create an `Acc
 1. Install [Libation desktop](https://github.com/rmcrackan/Libation/releases/latest) on your computer
 2. Open it and add your Audible account through the UI
 3. Locate `AccountsSettings.json` in your Libation config folder (check your home directory under the Libation folder)
-4. Copy `AccountsSettings.json` into the Libation app-data directory on your Runtipi server (e.g. `app-data/libation/`)
+4. Copy `AccountsSettings.json` into the Libation app-data directory on your Runtipi server (`app-data/cmolina/libation/`)
 5. Optionally copy `Settings.json` for custom settings (if not provided, defaults are used)
 6. Start or restart the app
 
