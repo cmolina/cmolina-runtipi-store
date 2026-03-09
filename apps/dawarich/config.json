@@ -7,8 +7,8 @@
   "port": 3030,
   "categories": ["utilities", "network"],
   "description": "Dawarich is a self-hosted alternative to Google Location History. Track your location history, visualize it on a map, and have complete control over your data.",
-  "tipi_version": 2,
-  "version": "1.3.1",
+  "tipi_version": 3,
+  "version": "1.3.2",
   "source": "https://github.com/Freika/dawarich",
   "website": "https://dawarich.app",
   "exposable": true,
@@ -26,10 +26,18 @@
     { "type": "password", "label": "Geoapify API Key", "env_variable": "GEOAPIFY_API_KEY", "required": false, "hint": "API key for Geoapify reverse geocoding service" },
     { "type": "text", "label": "Nominatim API Host", "env_variable": "NOMINATIM_API_HOST", "required": false, "hint": "Custom Nominatim API host for self-hosted reverse geocoding" },
     { "type": "password", "label": "Nominatim API Key", "env_variable": "NOMINATIM_API_KEY", "required": false, "hint": "API key for Nominatim reverse geocoding service" },
-    { "type": "boolean", "label": "Nominatim API Use HTTPS", "env_variable": "NOMINATIM_API_USE_HTTPS", "default": true, "required": false, "hint": "Use HTTPS for Nominatim API requests" }
+    { "type": "boolean", "label": "Nominatim API Use HTTPS", "env_variable": "NOMINATIM_API_USE_HTTPS", "default": true, "required": false, "hint": "Use HTTPS for Nominatim API requests" },
+    { "type": "text", "label": "Storage Backend", "env_variable": "STORAGE_BACKEND", "default": "local", "required": false, "hint": "Storage backend: local or s3" },
+    { "type": "text", "label": "OIDC Client ID", "env_variable": "OIDC_CLIENT_ID", "required": false, "hint": "Client ID from your OIDC provider (Authelia, Authentik, Keycloak, etc.)" },
+    { "type": "password", "label": "OIDC Client Secret", "env_variable": "OIDC_CLIENT_SECRET", "required": false, "hint": "Client secret from your OIDC provider" },
+    { "type": "text", "label": "OIDC Issuer URL", "env_variable": "OIDC_ISSUER", "required": false, "hint": "OIDC issuer URL, e.g. https://authentik.example.com/application/o/dawarich/" },
+    { "type": "text", "label": "OIDC Redirect URI", "env_variable": "OIDC_REDIRECT_URI", "required": false, "hint": "Callback URL, e.g. https://dawarich.example.com/users/auth/openid_connect/callback" },
+    { "type": "text", "label": "OIDC Provider Name", "env_variable": "OIDC_PROVIDER_NAME", "default": "Openid Connect", "required": false, "hint": "Display name for the OIDC provider on the sign-in page (e.g. Authentik, Authelia)" },
+    { "type": "boolean", "label": "OIDC Auto Register", "env_variable": "OIDC_AUTO_REGISTER", "default": true, "required": false, "hint": "Automatically create new users when signing in with OIDC" },
+    { "type": "boolean", "label": "Allow Email/Password Registration", "env_variable": "ALLOW_EMAIL_PASSWORD_REGISTRATION", "default": false, "required": false, "hint": "Allow public email/password registration alongside OIDC" }
   ],
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
   "created_at": 1738700000000,
-  "updated_at": 1738700000000
+  "updated_at": 1773085670623
 }
