@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "services": [
+    {
+      "name": "libation",
+      "image": "rmcrackan/libation:13.2.1",
+      "isMain": true,
+      "environment": [
+        { "key": "SLEEP_TIME", "value": "${SLEEP_TIME:-10m}" }
+      ],
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data/config",
+          "containerPath": "/config"
+        },
+        {
+          "hostPath": "${APP_DATA_DIR}/data/audiobooks",
+          "containerPath": "/data"
+        }
+      ]
+    }
+  ]
+}
