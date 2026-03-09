@@ -115,7 +115,42 @@ Use dynamic compose schema v2. Reference `apps/dawarich/docker-compose.json` for
 }
 ```
 
-### Rules
+### CRITICAL: Use runtipi environment variables correctly
+
+Runtipi provides built-in environment variables you MUST use for volumes:
+
+#### App-specific variables (use these in docker-compose.json):
+| Variable | Description |
+|----------|-------------|
+| `${APP_DATA_DIR}` | Path to the app's data folder (e.g., `/root/.local/share/runtipi/statedirs/appstore/apps/<app-id>`) |
+| `${ROOT_FOLDER_HOST}` | The root folder of the Runtipi installation |
+
+#### Global variables (commonly used):
+| Variable | Description |
+|----------|-------------|
+| `${TZ}` | Server timezone (e.g., `America/New_York`, `UTC`) |
+| `${POSTGRES_HOST}`, `${POSTGRES_PASSWORD}`, etc. | Database connection (if app uses postgres) |
+| `${REDIS_HOST}`, `${REDIS_PASSWORD}`, etc. | Redis connection (if app uses redis) |
+
+#### Volume path patterns (from official runtipi-appstore):
+
+**Config storage** — use `${APP_DATA_DIR}/data/config`:
+```json
+{"hostPath": "${APP_DATA_DIR}/data/config", "containerPath": "/config"}
+```
+
+**Media/data storage** — use `${ROOT_FOLDER_HOST}/media/data/...`:
+```json
+{"hostPath": "${ROOT_FOLDER_HOST}/media/data/audiobooks", "containerPath": "/audiobooks"}
+{"hostPath": "${ROOT_FOLDER_HOST}/media/data/books", "containerPath": "/books"}
+```
+
+**Examples from official store:**
+- Audiobookshelf: `${ROOT_FOLDER_HOST}/media/data/books/spoken` + `${APP_DATA_DIR}/data/config`
+- Calibre-web: `${ROOT_FOLDER_HOST}/media/data/books` + `${APP_DATA_DIR}/data/config` + `${APP_DATA_DIR}/data/calibre`
+- Actual-budget: `${APP_DATA_DIR}/data`
+
+### Additional rules
 
 - Exactly ONE service must have `"isMain": true`
 - Use `"internalPort"` on the main service (the port the container listens on)
