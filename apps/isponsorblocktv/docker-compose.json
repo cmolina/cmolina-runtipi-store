@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 2,
+  "services": [
+    {
+      "name": "isponsorblocktv",
+      "image": "ghcr.io/dmunozv04/isponsorblocktv:v2.6.1",
+      "isMain": true,
+      "networkMode": "host",
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data",
+          "containerPath": "/app/data"
+        }
+      ]
+    }
+  ]
+}
