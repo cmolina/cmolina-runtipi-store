@@ -6,8 +6,8 @@
   "author": "rmcrackan",
   "categories": ["media", "books"],
   "description": "Libation is a free, open-source application for managing your Audible audiobook library. It downloads and decrypts your audiobooks, removing DRM so you truly own your purchases. Supports multiple Audible regions and runs as a background service to automatically liberate new titles.",
-  "tipi_version": 1,
-  "version": "13.2.1",
+  "tipi_version": 2,
+  "version": "13.3.0",
   "source": "https://github.com/rmcrackan/Libation",
   "website": "https://getlibation.com",
   "no_gui": true,
@@ -26,5 +26,5 @@
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
   "created_at": 1773026395000,
-  "updated_at": 1773026395000
+  "updated_at": 1773765769505
 }
