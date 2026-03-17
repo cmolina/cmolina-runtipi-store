@@ -4,17 +4,51 @@
     {
       "name": "dawarich_redis",
       "image": "redis:7.4-alpine",
-      "isMain": false
+      "isMain": false,
+      "command": ["redis-server", "--save", "900", "1", "--save", "300", "10", "--appendonly", "no"],
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data/redis",
+          "containerPath": "/data"
+        }
+      ],
+      "restart": "always",
+      "healthCheck": {
+        "test": "redis-cli --raw incr ping",
+        "interval": "10s",
+        "retries": 5,
+        "startPeriod": "30s",
+        "timeout": "10s"
+      }
     },
     {
       "name": "dawarich_db",
       "image": "postgis/postgis:17-3.5-alpine",
       "isMain": false,
+      "shmSize": "1G",
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data/postgres",
+          "containerPath": "/var/lib/postgresql/data"
+        },
+        {
+          "hostPath": "${APP_DATA_DIR}/data/shared",
+          "containerPath": "/var/shared"
+        }
+      ],
       "environment": [
         { "key": "POSTGRES_USER", "value": "postgres" },
         { "key": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}" },
         { "key": "POSTGRES_DB", "value": "dawarich_production" }
-      ]
+      ],
+      "restart": "always",
+      "healthCheck": {
+        "test": "pg_isready -U postgres -d dawarich_production",
+        "interval": "10s",
+        "retries": 5,
+        "startPeriod": "30s",
+        "timeout": "10s"
+      }
     },
     {
       "name": "dawarich_app",
@@ -22,9 +56,28 @@
       "isMain": true,
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data/public",
+          "containerPath": "/var/app/public"
+        },
+        {
+          "hostPath": "${APP_DATA_DIR}/data/watched",
+          "containerPath": "/var/app/tmp/imports/watched"
+        },
+        {
+          "hostPath": "${APP_DATA_DIR}/data/storage",
+          "containerPath": "/var/app/storage"
+        },
+        {
+          "hostPath": "${APP_DATA_DIR}/data/postgres",
+          "containerPath": "/dawarich_db_data"
+        }
+      ],
       "command": ["bash", "-c", "bundle exec rails runner 'email = ENV[\"ADMIN_EMAIL\"].to_s.strip; password = ENV[\"ADMIN_PASSWORD\"].to_s.strip; if email.present? && password.present?; User.create!(email: email, password: password, password_confirmation: password, admin: true, status: :active, active_until: 100.years.from_now) unless User.exists?(email: email); User.find_by(email: \"demo@dawarich.app\")&.destroy!; end' && exec bin/rails server -p 3000 -b ::"],
       "stdinOpen": true,
       "tty": true,
+      "restart": "on-failure",
       "environment": [
         { "key": "RAILS_ENV", "value": "production" },
         { "key": "REDIS_URL", "value": "redis://dawarich_redis:6379" },
@@ -36,6 +89,9 @@
         { "key": "APPLICATION_HOSTS", "value": "${APP_DOMAIN},${APP_LOCAL_DOMAIN},${APP_HOST}:${APP_PORT}" },
         { "key": "TIME_ZONE", "value": "${TIME_ZONE}" },
         { "key": "APPLICATION_PROTOCOL", "value": "http" },
+        { "key": "PROMETHEUS_EXPORTER_ENABLED", "value": "false" },
+        { "key": "PROMETHEUS_EXPORTER_HOST", "value": "0.0.0.0" },
+        { "key": "PROMETHEUS_EXPORTER_PORT", "value": "9394" },
         { "key": "SECRET_KEY_BASE", "value": "${SECRET_KEY_BASE}" },
         { "key": "ADMIN_EMAIL", "value": "${ADMIN_EMAIL}" },
         { "key": "ADMIN_PASSWORD", "value": "${ADMIN_PASSWORD}" },
@@ -58,16 +114,56 @@
         { "key": "OIDC_AUTO_REGISTER", "value": "${OIDC_AUTO_REGISTER}" },
         { "key": "ALLOW_EMAIL_PASSWORD_REGISTRATION", "value": "${ALLOW_EMAIL_PASSWORD_REGISTRATION}" }
       ],
-      "dependsOn": ["dawarich_db", "dawarich_redis"]
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "100m",
+          "max-file": "5"
+        }
+      },
+      "healthCheck": {
+        "test": "wget -qO - http://127.0.0.1:3000/api/v1/health | grep -q ok",
+        "interval": "10s",
+        "retries": 30,
+        "startPeriod": "30s",
+        "timeout": "10s"
+      },
+      "dependsOn": {
+        "dawarich_db": { "condition": "service_healthy" },
+        "dawarich_redis": { "condition": "service_healthy" }
+      },
+      "deploy": {
+        "resources": {
+          "limits": {
+            "cpus": "0.50",
+            "memory": "4G"
+          }
+        }
+      }
     },
     {
       "name": "dawarich_sidekiq",
       "image": "freikin/dawarich:1.3.3",
       "isMain": false,
       "entrypoint": "sidekiq-entrypoint.sh",
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data/public",
+          "containerPath": "/var/app/public"
+        },
+        {
+          "hostPath": "${APP_DATA_DIR}/data/watched",
+          "containerPath": "/var/app/tmp/imports/watched"
+        },
+        {
+          "hostPath": "${APP_DATA_DIR}/data/storage",
+          "containerPath": "/var/app/storage"
+        }
+      ],
       "command": ["sidekiq"],
       "stdinOpen": true,
       "tty": true,
+      "restart": "on-failure",
       "environment": [
         { "key": "RAILS_ENV", "value": "production" },
         { "key": "REDIS_URL", "value": "redis://dawarich_redis:6379" },
@@ -79,6 +175,9 @@
         { "key": "APPLICATION_HOSTS", "value": "${APP_DOMAIN},${APP_LOCAL_DOMAIN},${APP_HOST}:${APP_PORT}" },
         { "key": "BACKGROUND_PROCESSING_CONCURRENCY", "value": "5" },
         { "key": "APPLICATION_PROTOCOL", "value": "http" },
+        { "key": "PROMETHEUS_EXPORTER_ENABLED", "value": "false" },
+        { "key": "PROMETHEUS_EXPORTER_HOST", "value": "dawarich_app" },
+        { "key": "PROMETHEUS_EXPORTER_PORT", "value": "9394" },
         { "key": "SECRET_KEY_BASE", "value": "${SECRET_KEY_BASE}" },
         { "key": "RAILS_LOG_TO_STDOUT", "value": "true" },
         { "key": "SELF_HOSTED", "value": "true" },
@@ -92,7 +191,25 @@
         { "key": "NOMINATIM_API_KEY", "value": "${NOMINATIM_API_KEY}" },
         { "key": "NOMINATIM_API_USE_HTTPS", "value": "${NOMINATIM_API_USE_HTTPS}" }
       ],
-      "dependsOn": ["dawarich_db", "dawarich_redis", "dawarich_app"]
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "100m",
+          "max-file": "5"
+        }
+      },
+      "healthCheck": {
+        "test": "pgrep -f sidekiq",
+        "interval": "10s",
+        "retries": 30,
+        "startPeriod": "30s",
+        "timeout": "10s"
+      },
+      "dependsOn": {
+        "dawarich_db": { "condition": "service_healthy" },
+        "dawarich_redis": { "condition": "service_healthy" },
+        "dawarich_app": { "condition": "service_healthy" }
+      }
     }
   ]
 }
