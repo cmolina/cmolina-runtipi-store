@@ -4,12 +4,12 @@ A curated collection of self-hosted applications for the [Runtipi](https://runti
 
 ## Available Apps
 
-| App | Description | Categories |
-|-----|-------------|------------|
-| **[BentoPDF](https://github.com/bentosmth/bentopdf)** | Privacy-first, client-side PDF toolkit — 100+ tools (merge, split, convert, compress, OCR, sign) that run entirely in your browser | utilities |
-| **[Dawarich](https://github.com/Freika/dawarich)** | Self-hosted alternative to Google Location History — track, visualize, and control your location data on an interactive map | utilities, network |
-| **[iSponsorBlockTV](https://github.com/iSponsorBlockTV/iSponsorBlockTV)** | Automatically skip YouTube sponsors, intros, outros, and ads on Apple TV, Android TV, Roku, and more | media, utilities |
-| **[Libation](https://github.com/rmcrackan/Libation)** | Free, open-source Audible audiobook manager — download, remove DRM, and truly own your audiobooks | books, media |
+| | App | Description | Categories |
+|---:|-----|-------------|------------|
+| <img src="apps/bentopdf/metadata/logo.jpg" width="32" height="32"> | **[BentoPDF](https://github.com/bentosmth/bentopdf)** | Privacy-first, client-side PDF toolkit — 100+ tools (merge, split, convert, compress, OCR, sign) that run entirely in your browser | utilities |
+| <img src="apps/dawarich/metadata/logo.jpg" width="32" height="32"> | **[Dawarich](https://github.com/Freika/dawarich)** | Self-hosted alternative to Google Location History — track, visualize, and control your location data on an interactive map | utilities, network |
+| <img src="apps/isponsorblocktv/metadata/logo.jpg" width="32" height="32"> | **[iSponsorBlockTV](https://github.com/iSponsorBlockTV/iSponsorBlockTV)** | Automatically skip YouTube sponsors, intros, outros, and ads on Apple TV, Android TV, Roku, and more | media, utilities |
+| <img src="apps/libation/metadata/logo.jpg" width="32" height="32"> | **[Libation](https://github.com/rmcrackan/Libation)** | Free, open-source Audible audiobook manager — download, remove DRM, and truly own your audiobooks | books, media |
 
 ## Repository Structure
 
@@ -28,7 +28,7 @@ tests/
 
 ## Adding Apps
 
-Use the `/add-app <app-name>` command to add a new app to this store. The command will:
+Use the `/add-app <app-name>` skill (for use with an AI agent) to add a new app to this store. The skill will:
 
 1. Research the app and find its Docker image
 2. Create the required configuration files
