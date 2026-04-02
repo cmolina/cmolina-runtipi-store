@@ -204,14 +204,13 @@ After creating all app files, update the root `README.md` to include the new app
 Read the current `README.md` and add a new row to the table following this format:
 
 ```markdown
-| <img src="apps/<app-id>/metadata/logo.jpg" width="32" height="32"> | **[App Name](https://github.com/owner/repo)** | Short description of the app | category1, category2 |
+| <img src="apps/<app-id>/metadata/logo.jpg" width="32" height="32"><br>**[App Name](https://github.com/owner/repo)** | Short description of the app |
 ```
 
 Rules:
 - Insert the new row in **alphabetical order** by app name
-- Include the app's logo icon using `<img>` tag (width="32" height="32")
+- Include the app's logo icon using `<img>` tag (width="24" height="24") — merged with the app name in a single column
 - Use the app's `short_desc` from `config.json` for the description column
-- Use the `categories` array from `config.json` for the categories column
 - Link to the app's `source` URL from `config.json`
 - If the README doesn't have an "Available Apps" table yet, create one following the existing structure
 
