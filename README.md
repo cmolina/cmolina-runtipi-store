@@ -1,31 +1,46 @@
-# Example App Store Template
+# cmolina's Runtipi App Store
 
-This repository serves as a template for creating your own custom app store for the Runtipi platform. Use this as a starting point to create and share your own collection of applications.
+A curated collection of self-hosted applications for the [Runtipi](https://runtipi.io/) platform.
+
+## Available Apps
+
+| App | Description | Categories |
+|-----|-------------|------------|
+| **[BentoPDF](https://github.com/bentosmth/bentopdf)** | Privacy-first, client-side PDF toolkit — 100+ tools (merge, split, convert, compress, OCR, sign) that run entirely in your browser | utilities |
+| **[Dawarich](https://github.com/Freika/dawarich)** | Self-hosted alternative to Google Location History — track, visualize, and control your location data on an interactive map | utilities, network |
+| **[iSponsorBlockTV](https://github.com/iSponsorBlockTV/iSponsorBlockTV)** | Automatically skip YouTube sponsors, intros, outros, and ads on Apple TV, Android TV, Roku, and more | media, utilities |
+| **[Libation](https://github.com/rmcrackan/Libation)** | Free, open-source Audible audiobook manager — download, remove DRM, and truly own your audiobooks | books, media |
 
 ## Repository Structure
 
-- **apps/**: Contains individual app directories
+```
+apps/
+├── <app-id>/
+│   ├── config.json          # App configuration and form fields
+│   ├── docker-compose.json  # Docker services definition
+│   └── metadata/
+│       ├── description.md   # App description
+│       └── logo.jpg         # App logo
+├── ...
+tests/
+└── apps.test.ts             # Validation tests
+```
 
-  - Each app has its own folder (e.g., `whoami/`) with the following structure:
-    - `config.json`: App configuration file
-    - `docker-compose.json`: Docker setup for the app
-    - `metadata/`: Contains app visuals and descriptions
-      - `description.md`: Markdown description of the app
-      - `logo.jpg`: App logo image
+## Adding Apps
 
-- **tests/**: Contains test files for the app store
+Use the `/add-app <app-name>` command to add a new app to this store. The command will:
 
-  - `apps.test.ts`: Test suite for validating apps
+1. Research the app and find its Docker image
+2. Create the required configuration files
+3. Download the app logo
+4. Update this README with the new app
+5. Run validation tests
+6. Create a PR with the new app
 
-## Getting Started
+## Updating Apps
 
-This repository is intended to serve as a template for creating your own app store. Follow these steps to get started:
+Use the `/update-app <app-name>` command to update an app to its latest version.
 
-1. Click the "Use this template" button to create a new repository based on this template
-2. Customize the apps or add your own app folders in the `apps/` directory
-3. Test your app store by using it with Runtipi
+## License
 
-## Documentation
-
-For detailed instructions on creating your own app store, please refer to the official guide:
-[Create Your Own App Store Guide](https://runtipi.io/docs/guides/create-your-own-app-store)
+This app store configuration is provided as-is for personal use.
