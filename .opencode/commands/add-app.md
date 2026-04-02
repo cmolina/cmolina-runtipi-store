@@ -197,12 +197,30 @@ If tests fail, read the error output carefully. Fix the issues and re-run. Commo
 - `internalPort` type mismatch (try both string and number)
 - Invalid form_field type
 
-## Step 8: Create PR and open in browser
+## Step 8: Update README.md
 
-Once tests pass:
+After creating all app files, update the root `README.md` to include the new app in the "Available Apps" table.
+
+Read the current `README.md` and add a new row to the table following this format:
+
+```markdown
+| <img src="apps/<app-id>/metadata/logo.jpg" width="32" height="32"> | **[App Name](https://github.com/owner/repo)** | Short description of the app | category1, category2 |
+```
+
+Rules:
+- Insert the new row in **alphabetical order** by app name
+- Include the app's logo icon using `<img>` tag (width="32" height="32")
+- Use the app's `short_desc` from `config.json` for the description column
+- Use the `categories` array from `config.json` for the categories column
+- Link to the app's `source` URL from `config.json`
+- If the README doesn't have an "Available Apps" table yet, create one following the existing structure
+
+## Step 9: Create PR and open in browser
+
+Once tests pass and README is updated:
 
 1. Create a new branch: `git checkout -b <app-id>`
-2. Stage all new files: `git add apps/<app-id>/`
+2. Stage all new files: `git add apps/<app-id>/ README.md`
 3. Commit: `git commit -m "Add <App Name> app - <short description>"`
 4. Push: `git push -u origin HEAD`
 5. Create PR: `gh pr create --title "Add <App Name>" --body "<description of the app and what it does>"`
