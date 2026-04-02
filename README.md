@@ -4,12 +4,12 @@ A curated collection of self-hosted applications for the [Runtipi](https://runti
 
 ## Available Apps
 
-| | App | Description | Categories |
-|---:|-----|-------------|------------|
-| <img src="apps/bentopdf/metadata/logo.jpg" width="32" height="32"> | **[BentoPDF](https://github.com/bentosmth/bentopdf)** | Privacy-first, client-side PDF toolkit — 100+ tools (merge, split, convert, compress, OCR, sign) that run entirely in your browser | utilities |
-| <img src="apps/dawarich/metadata/logo.jpg" width="32" height="32"> | **[Dawarich](https://github.com/Freika/dawarich)** | Self-hosted alternative to Google Location History — track, visualize, and control your location data on an interactive map | utilities, network |
-| <img src="apps/isponsorblocktv/metadata/logo.jpg" width="32" height="32"> | **[iSponsorBlockTV](https://github.com/iSponsorBlockTV/iSponsorBlockTV)** | Automatically skip YouTube sponsors, intros, outros, and ads on Apple TV, Android TV, Roku, and more | media, utilities |
-| <img src="apps/libation/metadata/logo.jpg" width="32" height="32"> | **[Libation](https://github.com/rmcrackan/Libation)** | Free, open-source Audible audiobook manager — download, remove DRM, and truly own your audiobooks | books, media |
+| App | Description |
+|-----|-------------|
+| <img src="apps/bentopdf/metadata/logo.jpg" width="32" height="32"><br>**[BentoPDF](https://github.com/bentosmth/bentopdf)** | Privacy-first, client-side PDF toolkit — 100+ tools (merge, split, convert, compress, OCR, sign) that run entirely in your browser |
+| <img src="apps/dawarich/metadata/logo.jpg" width="32" height="32"><br>**[Dawarich](https://github.com/Freika/dawarich)** | Self-hosted alternative to Google Location History — track, visualize, and control your location data on an interactive map |
+| <img src="apps/isponsorblocktv/metadata/logo.jpg" width="32" height="32"><br>**[iSponsorBlockTV](https://github.com/iSponsorBlockTV/iSponsorBlockTV)** | Automatically skip YouTube sponsors, intros, outros, and ads on Apple TV, Android TV, Roku, and more |
+| <img src="apps/libation/metadata/logo.jpg" width="32" height="32"><br>**[Libation](https://github.com/rmcrackan/Libation)** | Free, open-source Audible audiobook manager — download, remove DRM, and truly own your audiobooks |
 
 ## Repository Structure
 
