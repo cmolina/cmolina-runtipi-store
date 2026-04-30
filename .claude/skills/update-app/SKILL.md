@@ -21,12 +21,22 @@ Given an app name (e.g., `dawarich`), I:
 
 ## Step 0 — Read current version from the bare repo
 
-The repo is a **bare git repo** at `/Users/cmolina/code/cmolina-runtipi-store.git`. There is no checkout at the repo root — always run git commands with `-C /Users/cmolina/code/cmolina-runtipi-store.git` or from inside a worktree.
+The repo is a **bare git repo**. There is no checkout at the repo root — always run git commands with `-C <bare-repo-root>` or from inside a worktree.
+
+First, detect the bare repo root and GitHub repo name:
+
+```bash
+# Get bare repo root (run from anywhere inside the repo)
+BARE_REPO=$(git rev-parse --absolute-git-dir)
+
+# Get GitHub repo (e.g. "owner/repo")
+GH_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+```
 
 Read the current app config directly from the `main` branch without needing any worktree:
 
 ```bash
-git -C /Users/cmolina/code/cmolina-runtipi-store.git show main:apps/<app-name>/config.json
+git -C "$BARE_REPO" show main:apps/<app-name>/config.json
 ```
 
 Extract `version` and `source` fields. Parse `source` to get the GitHub owner/repo (e.g., `https://github.com/Freika/dawarich` → `Freika/dawarich`).
@@ -52,29 +62,29 @@ Also capture the release **body/notes** — needed to detect new environment var
 
 ## Step 2 — Create a fresh git worktree from latest origin/main
 
-Worktrees go in `/private/tmp/`. The branch is created inline during `worktree add` — do NOT run a separate `git checkout -b` afterward.
+Worktrees go in `/tmp/`. The branch is created inline during `worktree add` — do NOT run a separate `git checkout -b` afterward.
 
 **CRITICAL**: Must fetch with explicit refspec to create proper `origin/main` reference, then use that reference directly (not FETCH_HEAD which can be stale).
 
 ```bash
 # Fetch main from origin with explicit refspec to create origin/main reference
-git -C /Users/cmolina/code/cmolina-runtipi-store.git fetch origin +refs/heads/main:refs/remotes/origin/main
+git -C "$BARE_REPO" fetch origin +refs/heads/main:refs/remotes/origin/main
 
 # Verify we have the latest
-git -C /Users/cmolina/code/cmolina-runtipi-store.git log origin/main --oneline -1
+git -C "$BARE_REPO" log origin/main --oneline -1
 
 # Remove any stale worktree at that path
-git -C /Users/cmolina/code/cmolina-runtipi-store.git worktree remove --force /private/tmp/<app-name>-update 2>/dev/null || true
-rm -rf /private/tmp/<app-name>-update
-git -C /Users/cmolina/code/cmolina-runtipi-store.git worktree prune
+git -C "$BARE_REPO" worktree remove --force /tmp/<app-name>-update 2>/dev/null || true
+rm -rf /tmp/<app-name>-update
+git -C "$BARE_REPO" worktree prune
 
 # Create the worktree on a new branch pointing at origin/main (latest)
-git -C /Users/cmolina/code/cmolina-runtipi-store.git worktree add /private/tmp/<app-name>-update -b update-<app-name>-<new-version> origin/main
+git -C "$BARE_REPO" worktree add /tmp/<app-name>-update -b update-<app-name>-<new-version> origin/main
 ```
 
 **IMPORTANT**: Always use `origin/main` reference after fetching with the explicit refspec. This ensures you're working from the latest remote main, not a cached/stale FETCH_HEAD.
 
-All subsequent file edits happen inside `/private/tmp/<app-name>-update/apps/<app-name>/`.
+All subsequent file edits happen inside `/tmp/<app-name>-update/apps/<app-name>/`.
 
 ---
 
@@ -133,7 +143,7 @@ For each new env var:
 
 ## Step 4 — Update config.json
 
-File: `/private/tmp/<app-name>-update/apps/<app-name>/config.json`
+File: `/tmp/<app-name>-update/apps/<app-name>/config.json`
 
 Changes to make:
 1. `"version"`: set to new version string (match existing format exactly)
@@ -152,7 +162,7 @@ python3 -c "import time; print(int(time.time() * 1000))"
 
 ## Step 5 — Update docker-compose.json
 
-File: `/private/tmp/<app-name>-update/apps/<app-name>/docker-compose.json`
+File: `/tmp/<app-name>-update/apps/<app-name>/docker-compose.json`
 
 Changes to make:
 1. Update **all** `"image"` fields that contain the old version string to the new version across every service
@@ -165,7 +175,7 @@ Changes to make:
 ## Step 6 — Run tests
 
 ```bash
-cd /private/tmp/<app-name>-update && bun install && bun run test
+cd /tmp/<app-name>-update && bun install && bun run test
 ```
 
 If tests fail: read the error, fix the issue, re-run. Do NOT proceed until all tests pass.
@@ -179,8 +189,8 @@ Commit and push from **inside the worktree**. Use `--head` and `--base` explicit
 **NOTE**: If git commands fail with "fatal: this operation must be run in a work tree", set explicit environment variables:
 
 ```bash
-export GIT_DIR=/Users/cmolina/code/cmolina-runtipi-store.git/worktrees/<app-name>-update
-export GIT_WORK_TREE=/private/tmp/<app-name>-update
+export GIT_DIR="$BARE_REPO/worktrees/<app-name>-update"
+export GIT_WORK_TREE=/tmp/<app-name>-update
 ```
 
 Then run all subsequent git commands normally.
@@ -191,6 +201,7 @@ git commit --no-gpg-sign -m "Update <AppName> to <new-version>"
 git push -u origin update-<app-name>-<new-version>
 
 gh pr create \
+  --repo "$GH_REPO" \
   --head update-<app-name>-<new-version> \
   --base main \
   --title "Update <AppName> to <new-version>" \

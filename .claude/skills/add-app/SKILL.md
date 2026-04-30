@@ -46,31 +46,43 @@ Search extensively for **$ARGUMENTS** to gather:
 
 This is a bare git repo. All work must happen in a worktree checked out from `origin/main`.
 
+First, detect the bare repo root and GitHub repo name:
+
+```bash
+# Get bare repo root (run from anywhere inside the repo)
+BARE_REPO=$(git rev-parse --absolute-git-dir)
+
+# Get GitHub repo (e.g. "owner/repo")
+GH_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+```
+
+Then create the worktree:
+
 ```bash
 # Fetch main with explicit refspec to create proper origin/main reference
-git -C /Users/cmolina/code/cmolina-runtipi-store.git fetch origin +refs/heads/main:refs/remotes/origin/main
+git -C "$BARE_REPO" fetch origin +refs/heads/main:refs/remotes/origin/main
 
 # Remove any stale worktree
-git -C /Users/cmolina/code/cmolina-runtipi-store.git worktree remove --force /private/tmp/add-<app-id> 2>/dev/null || true
-rm -rf /private/tmp/add-<app-id>
-git -C /Users/cmolina/code/cmolina-runtipi-store.git worktree prune
+git -C "$BARE_REPO" worktree remove --force /tmp/add-<app-id> 2>/dev/null || true
+rm -rf /tmp/add-<app-id>
+git -C "$BARE_REPO" worktree prune
 
 # Create worktree from origin/main on a new branch
-git -C /Users/cmolina/code/cmolina-runtipi-store.git worktree add /private/tmp/add-<app-id> -b add-<app-id> origin/main
+git -C "$BARE_REPO" worktree add /tmp/add-<app-id> -b add-<app-id> origin/main
 
 # Now create the app directory inside the worktree
-mkdir -p /private/tmp/add-<app-id>/apps/<app-id>/metadata
+mkdir -p /tmp/add-<app-id>/apps/<app-id>/metadata
 ```
 
 The `<app-id>` must be lowercase kebab-case (e.g., `my-app`).
 
-**All subsequent file creation/editing must use paths inside `/private/tmp/add-<app-id>/apps/<app-id>/`**
+**All subsequent file creation/editing must use paths inside `/tmp/add-<app-id>/apps/<app-id>/`**
 
 ---
 
 ## Step 3: Create config.json
 
-Create at `/private/tmp/add-<app-id>/apps/<app-id>/config.json`
+Create at `/tmp/add-<app-id>/apps/<app-id>/config.json`
 
 Use this structure — reference existing apps `apps/dawarich/config.json` and `apps/whoami/config.json` for style:
 
@@ -115,7 +127,7 @@ For each environment variable the user needs to configure:
 
 ## Step 4: Create docker-compose.json
 
-Create at `/private/tmp/add-<app-id>/apps/<app-id>/docker-compose.json`
+Create at `/tmp/add-<app-id>/apps/<app-id>/docker-compose.json`
 
 Use dynamic compose schema v2. Reference `apps/dawarich/docker-compose.json` for multi-service and `apps/whoami/docker-compose.json` for single-service examples.
 
@@ -186,7 +198,7 @@ Runtipi provides built-in environment variables you MUST use for volumes:
 
 ## Step 5: Create metadata/description.md
 
-Create at `/private/tmp/add-<app-id>/apps/<app-id>/metadata/description.md`
+Create at `/tmp/add-<app-id>/apps/<app-id>/metadata/description.md`
 
 Write a markdown description with:
 - What the app is and what problem it solves
@@ -199,7 +211,7 @@ Reference `apps/dawarich/metadata/description.md` for style.
 
 ## Step 6: Download logo
 
-Download the app's official logo/icon and save it as `/private/tmp/add-<app-id>/apps/<app-id>/metadata/logo.jpg`.
+Download the app's official logo/icon and save it as `/tmp/add-<app-id>/apps/<app-id>/metadata/logo.jpg`.
 
 - Try the GitHub repo's avatar, social preview, or icon from the app's website
 - If the source is PNG, convert to JPG: `sips -s format jpeg logo.png --out logo.jpg` (macOS)
@@ -211,7 +223,7 @@ Download the app's official logo/icon and save it as `/private/tmp/add-<app-id>/
 ## Step 7: Run tests
 
 ```bash
-cd /private/tmp/add-<app-id> && bun install && bun run test
+cd /tmp/add-<app-id> && bun install && bun run test
 ```
 
 Tests validate:
@@ -235,8 +247,8 @@ Once tests pass, commit from the worktree:
 **NOTE**: If git commands fail with "fatal: this operation must be run in a work tree", set explicit environment variables:
 
 ```bash
-export GIT_DIR=/Users/cmolina/code/cmolina-runtipi-store.git/worktrees/add-<app-id>
-export GIT_WORK_TREE=/private/tmp/add-<app-id>
+export GIT_DIR="$BARE_REPO/worktrees/add-<app-id>"
+export GIT_WORK_TREE=/tmp/add-<app-id>
 ```
 
 Then run all subsequent git commands normally.
@@ -246,7 +258,7 @@ git add apps/<app-id>/
 git commit --no-gpg-sign -m "Add <App Name> app - <short description>"
 git push -u origin add-<app-id>
 
-gh pr create --repo cmolina/cmolina-runtipi-store \
+gh pr create --repo "$GH_REPO" \
   --head add-<app-id> \
   --base main \
   --title "Add <App Name>" \
