@@ -1,59 +1,88 @@
 ---
-description: Add a self-hosted app to this runtipi store
-argument-hint: <app-name>
+name: add-app
+description: Add a self-hosted app to the runtipi store — researches the app, creates config.json, docker-compose.json, metadata files, downloads logo, runs tests, and opens a PR. Triggered by /add-app <app-name>.
+license: MIT
+compatibility: claude-code
+metadata:
+  audience: maintainers
+  workflow: github
 ---
 
-[search-mode]
-MAXIMIZE SEARCH EFFORT. Launch multiple background agents IN PARALLEL:
-- explore agents (codebase patterns, file structures)
-- librarian agents (remote repos, official docs, Docker Hub, GitHub)
-NEVER stop at first result - be exhaustive.
+## What I do
 
-Add the self-hosted application **$ARGUMENTS** to this runtipi app store.
+Given an app name, I:
 
-## Context
+1. Research the app extensively (GitHub repo, Docker image, ports, env vars, dependencies)
+2. Create app directory structure at `apps/<app-id>/`
+3. Generate `config.json` with metadata, categories, and form_fields
+4. Generate `docker-compose.json` with service definitions
+5. Create `metadata/description.md` with app description
+6. Download the app's logo to `metadata/logo.jpg`
+7. Run tests
+8. Ship a PR
 
-This is a custom runtipi app store repo. Apps live under `apps/<app-id>/`. Each app requires exactly 4 files:
-
-```
-apps/<app-id>/
-  config.json
-  docker-compose.json
-  metadata/
-    description.md
-    logo.jpg
-```
-
-Validation uses `@runtipi/common` schemas (`appInfoSchema`, `dynamicComposeSchema`) via `bun test`.
+---
 
 ## Step 1: Research the app
 
 Search extensively for **$ARGUMENTS** to gather:
 
-1. **GitHub repository** - find the official repo, read the README, docker-compose examples, and `.env.example` or environment variable docs
-2. **Docker image** - find the official Docker image name on Docker Hub or GitHub Container Registry. Get the **latest stable version tag** (not `latest`)
-3. **Default port** - what port the app listens on inside the container
-4. **Environment variables** - ALL of them. Classify each as:
+1. **GitHub repository** — find the official repo, read the README, docker-compose examples, and `.env.example` or environment variable docs
+2. **Docker image** — find the official Docker image name on Docker Hub or GitHub Container Registry. Get the **latest stable version tag** (not `latest`)
+3. **Default port** — what port the app listens on inside the container
+4. **Environment variables** — ALL of them. Classify each as:
    - Required (app won't start without it)
    - Optional (has sensible defaults)
    - Generated (secrets, passwords, keys - use `"type": "random"`)
-5. **Dependencies** - does it need a database (postgres, mysql, mariadb), cache (redis, valkey), or other services?
-6. **Description** - what the app does, key features, what it replaces
-7. **Categories** - pick from: `network`, `media`, `development`, `automation`, `social`, `utilities`, `photography`, `security`, `featured`, `books`, `data`, `music`, `finance`, `gaming`, `ai`
-8. **Supported architectures** - typically `["arm64", "amd64"]`, verify from Docker Hub
-9. **Logo** - find a URL to the app's logo/icon (PNG or JPG)
+5. **Dependencies** — does it need a database (postgres, mysql, mariadb), cache (redis, valkey), or other services?
+6. **Description** — what the app does, key features, what it replaces
+7. **Categories** — pick from: `network`, `media`, `development`, `automation`, `social`, `utilities`, `photography`, `security`, `featured`, `books`, `data`, `music`, `finance`, `gaming`, `ai`
+8. **Supported architectures** — typically `["arm64", "amd64"]`, verify from Docker Hub
+9. **Logo** — find a URL to the app's logo/icon (PNG or JPG)
 
-Use librarian agents to search GitHub, Docker Hub, and the app's official docs IN PARALLEL.
+---
 
-## Step 2: Create the app directory
+## Step 2: Create a git worktree from latest origin/main
+
+This is a bare git repo. All work must happen in a worktree checked out from `origin/main`.
+
+First, detect the bare repo root and GitHub repo name:
 
 ```bash
-mkdir -p apps/<app-id>/metadata
+# Get bare repo root (run from anywhere inside the repo)
+BARE_REPO=$(git rev-parse --absolute-git-dir)
+
+# Get GitHub repo (e.g. "owner/repo")
+GH_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+```
+
+Then create the worktree:
+
+```bash
+# Fetch main with explicit refspec to create proper origin/main reference
+git -C "$BARE_REPO" fetch origin +refs/heads/main:refs/remotes/origin/main
+
+# Remove any stale worktree
+git -C "$BARE_REPO" worktree remove --force /tmp/add-<app-id> 2>/dev/null || true
+rm -rf /tmp/add-<app-id>
+git -C "$BARE_REPO" worktree prune
+
+# Create worktree from origin/main on a new branch
+git -C "$BARE_REPO" worktree add /tmp/add-<app-id> -b add-<app-id> origin/main
+
+# Now create the app directory inside the worktree
+mkdir -p /tmp/add-<app-id>/apps/<app-id>/metadata
 ```
 
 The `<app-id>` must be lowercase kebab-case (e.g., `my-app`).
 
+**All subsequent file creation/editing must use paths inside `/tmp/add-<app-id>/apps/<app-id>/`**
+
+---
+
 ## Step 3: Create config.json
+
+Create at `/tmp/add-<app-id>/apps/<app-id>/config.json`
 
 Use this structure — reference existing apps `apps/dawarich/config.json` and `apps/whoami/config.json` for style:
 
@@ -94,7 +123,11 @@ For each environment variable the user needs to configure:
 
 `env_variable` values MUST be `UPPER_SNAKE_CASE`.
 
+---
+
 ## Step 4: Create docker-compose.json
+
+Create at `/tmp/add-<app-id>/apps/<app-id>/docker-compose.json`
 
 Use dynamic compose schema v2. Reference `apps/dawarich/docker-compose.json` for multi-service and `apps/whoami/docker-compose.json` for single-service examples.
 
@@ -161,7 +194,11 @@ Runtipi provides built-in environment variables you MUST use for volumes:
 - Hard-code reasonable defaults for internal config (database names, usernames) — only expose user-facing config as form_fields
 - Pin image versions — never use `latest` tag
 
+---
+
 ## Step 5: Create metadata/description.md
+
+Create at `/tmp/add-<app-id>/apps/<app-id>/metadata/description.md`
 
 Write a markdown description with:
 - What the app is and what problem it solves
@@ -170,19 +207,23 @@ Write a markdown description with:
 
 Reference `apps/dawarich/metadata/description.md` for style.
 
+---
+
 ## Step 6: Download logo
 
-Download the app's official logo/icon and save it as `apps/<app-id>/metadata/logo.jpg`.
+Download the app's official logo/icon and save it as `/tmp/add-<app-id>/apps/<app-id>/metadata/logo.jpg`.
 
 - Try the GitHub repo's avatar, social preview, or icon from the app's website
 - If the source is PNG, convert to JPG: `sips -s format jpeg logo.png --out logo.jpg` (macOS)
 - Target a square image, reasonable size (128x128 to 512x512)
 - If you absolutely cannot find a logo, generate a simple placeholder
 
+---
+
 ## Step 7: Run tests
 
 ```bash
-bun install && bun run test
+cd /tmp/add-<app-id> && bun install && bun run test
 ```
 
 Tests validate:
@@ -197,30 +238,48 @@ If tests fail, read the error output carefully. Fix the issues and re-run. Commo
 - `internalPort` type mismatch (try both string and number)
 - Invalid form_field type
 
-## Step 8: Update README.md
+---
 
-After creating all app files, update the root `README.md` to include the new app in the "Available Apps" table.
+## Step 8: Commit, push and create PR from worktree
 
-Read the current `README.md` and add a new row to the table following this format:
+Once tests pass, commit from the worktree:
 
-```markdown
-| <img src="apps/<app-id>/metadata/logo.jpg" width="32" height="32"><br>**[App Name](https://github.com/owner/repo)** | Short description of the app |
+**NOTE**: If git commands fail with "fatal: this operation must be run in a work tree", set explicit environment variables:
+
+```bash
+export GIT_DIR="$BARE_REPO/worktrees/add-<app-id>"
+export GIT_WORK_TREE=/tmp/add-<app-id>
 ```
 
-Rules:
-- Insert the new row in **alphabetical order** by app name
-- Include the app's logo icon using `<img>` tag (width="24" height="24") — merged with the app name in a single column
-- Use the app's `short_desc` from `config.json` for the description column
-- Link to the app's `source` URL from `config.json`
-- If the README doesn't have an "Available Apps" table yet, create one following the existing structure
+Then run all subsequent git commands normally.
 
-## Step 9: Create PR and open in browser
+```bash
+git add apps/<app-id>/
+git commit --no-gpg-sign -m "Add <App Name> app - <short description>"
+git push -u origin add-<app-id>
 
-Once tests pass and README is updated:
+gh pr create --repo "$GH_REPO" \
+  --head add-<app-id> \
+  --base main \
+  --title "Add <App Name>" \
+  --body "<description of the app and what it does>"
 
-1. Create a new branch: `git checkout -b <app-id>`
-2. Stage all new files: `git add apps/<app-id>/ README.md`
-3. Commit: `git commit -m "Add <App Name> app - <short description>"`
-4. Push: `git push -u origin HEAD`
-5. Create PR: `gh pr create --title "Add <App Name>" --body "<description of the app and what it does>"`
-6. Open in browser: `open <PR_URL>`
+# Open PR in browser for review
+open <PR_URL>
+```
+
+---
+
+## Rules
+
+- **NEVER** modify files outside `apps/<app-id>/`
+- **NEVER** touch unrelated apps
+- `app-id` must be lowercase kebab-case
+- Always use explicit refspec when fetching (`+refs/heads/main:refs/remotes/origin/main`)
+- Always use `origin/main` as the base for worktrees (never `FETCH_HEAD`)
+- If git commands in the worktree fail with "must be run in a work tree", explicitly set `GIT_DIR` and `GIT_WORK_TREE` env vars (see Step 8 troubleshooting)
+- Always run tests before shipping PR
+- Never use `latest` as an image tag — always pin to exact version
+- All 4 files required: `config.json`, `docker-compose.json`, `metadata/description.md`, `metadata/logo.jpg`
+- Match categories to the official list: `network`, `media`, `development`, `automation`, `social`, `utilities`, `photography`, `security`, `featured`, `books`, `data`, `music`, `finance`, `gaming`, `ai`
+- Reference existing apps (dawarich, whoami) for style and structure

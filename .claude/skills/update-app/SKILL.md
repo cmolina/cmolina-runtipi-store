@@ -2,7 +2,7 @@
 name: update-app
 description: Update an existing runtipi store app to its latest version — fetches the latest GitHub release, bumps version in config.json and docker-compose.json, detects new env vars, adds missing form_fields, runs tests, and opens a PR. Triggered by /update-app <app_name>.
 license: MIT
-compatibility: opencode
+compatibility: claude-code
 metadata:
   audience: maintainers
   workflow: github
@@ -21,12 +21,22 @@ Given an app name (e.g., `dawarich`), I:
 
 ## Step 0 — Read current version from the bare repo
 
-The repo is a **bare git repo** at `/Users/cmolina/code/cmolina-runtipi-store.git`. There is no checkout at the repo root — always run git commands with `-C /Users/cmolina/code/cmolina-runtipi-store.git` or from inside a worktree.
+The repo is a **bare git repo**. There is no checkout at the repo root — always run git commands with `-C <bare-repo-root>` or from inside a worktree.
+
+First, detect the bare repo root and GitHub repo name:
+
+```bash
+# Get bare repo root (run from anywhere inside the repo)
+BARE_REPO=$(git rev-parse --absolute-git-dir)
+
+# Get GitHub repo (e.g. "owner/repo")
+GH_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+```
 
 Read the current app config directly from the `main` branch without needing any worktree:
 
 ```bash
-git -C /Users/cmolina/code/cmolina-runtipi-store.git show main:apps/<app-name>/config.json
+git -C "$BARE_REPO" show main:apps/<app-name>/config.json
 ```
 
 Extract `version` and `source` fields. Parse `source` to get the GitHub owner/repo (e.g., `https://github.com/Freika/dawarich` → `Freika/dawarich`).
@@ -50,28 +60,53 @@ Also capture the release **body/notes** — needed to detect new environment var
 
 ---
 
-## Step 2 — Create a fresh git worktree
+## Step 2 — Create a fresh git worktree from latest origin/main
 
-Worktrees go in `/private/tmp/`. The branch is created inline during `worktree add` — do NOT run a separate `git checkout -b` afterward.
+Worktrees go in `/tmp/`. The branch is created inline during `worktree add` — do NOT run a separate `git checkout -b` afterward.
+
+**CRITICAL**: Must fetch with explicit refspec to create proper `origin/main` reference, then use that reference directly (not FETCH_HEAD which can be stale).
 
 ```bash
-# Fetch main from origin first (origin/main ref doesn't exist in bare repos — use FETCH_HEAD)
-git -C /Users/cmolina/code/cmolina-runtipi-store.git fetch origin main
+# Fetch main from origin with explicit refspec to create origin/main reference
+git -C "$BARE_REPO" fetch origin +refs/heads/main:refs/remotes/origin/main
+
+# Verify we have the latest
+git -C "$BARE_REPO" log origin/main --oneline -1
 
 # Remove any stale worktree at that path
-git -C /Users/cmolina/code/cmolina-runtipi-store.git worktree remove --force /private/tmp/<app-name>-update 2>/dev/null || true
-rm -rf /private/tmp/<app-name>-update
-git -C /Users/cmolina/code/cmolina-runtipi-store.git worktree prune
+git -C "$BARE_REPO" worktree remove --force /tmp/<app-name>-update 2>/dev/null || true
+rm -rf /tmp/<app-name>-update
+git -C "$BARE_REPO" worktree prune
 
-# Create the worktree on a new branch pointing at FETCH_HEAD (= origin/main)
-git -C /Users/cmolina/code/cmolina-runtipi-store.git worktree add /private/tmp/<app-name>-update -b update-<app-name>-<new-version> FETCH_HEAD
+# Create the worktree on a new branch pointing at origin/main (latest)
+git -C "$BARE_REPO" worktree add /tmp/<app-name>-update -b update-<app-name>-<new-version> origin/main
 ```
 
-All subsequent file edits happen inside `/private/tmp/<app-name>-update/apps/<app-name>/`.
+**IMPORTANT**: Always use `origin/main` reference after fetching with the explicit refspec. This ensures you're working from the latest remote main, not a cached/stale FETCH_HEAD.
+
+All subsequent file edits happen inside `/tmp/<app-name>-update/apps/<app-name>/`.
 
 ---
 
 ## Step 3 — Detect new environment variables
+
+Use **two complementary sources** — the release body AND the upstream compose file. The upstream compose is sometimes updated later than the release, so the release notes are the authoritative source for breaking changes.
+
+### 3a — Scan the release body for env var mentions
+
+The release body was already captured in Step 1. Scan it for:
+- Any `UPPER_SNAKE_CASE` tokens that look like env var names
+- Explicit migration instructions (e.g. "set these env vars", "required in production")
+- Linked issues or comments — if the release references an issue/comment URL, fetch it with `gh api` and extract any env var names mentioned there
+
+```bash
+# Example: fetch a linked issue comment
+gh api repos/<owner>/<repo>/issues/comments/<comment-id> --jq '.body'
+```
+
+Extract every env var name mentioned. These are candidates regardless of whether the upstream compose has them yet.
+
+### 3b — Scan the upstream compose and .env.example
 
 The upstream repo may not have `docker-compose.yml` or `.env.example` at the **repo root**. Always list the root directory first to find where these files live:
 
@@ -92,7 +127,11 @@ gh api repos/<owner>/<repo>/contents/<path>/docker-compose.yml --jq '.content' |
 gh api repos/<owner>/<repo>/contents/<path>/.env.example --jq '.content' | base64 -d 2>/dev/null || true
 ```
 
-Collect all env var keys from the upstream compose file (all services). Compare against keys already present in `docker-compose.json` environment arrays across all services. The **difference** = new env vars to evaluate.
+Collect all env var keys from the upstream compose file (all services).
+
+### 3c — Merge and evaluate
+
+Combine candidates from 3a and 3b. Compare the full set against keys already present in `docker-compose.json` environment arrays across all services. The **difference** = new env vars to evaluate.
 
 For each new env var:
 - Classify it: `random` secret, user-set `password`, `text`, `boolean`
@@ -104,7 +143,7 @@ For each new env var:
 
 ## Step 4 — Update config.json
 
-File: `/private/tmp/<app-name>-update/apps/<app-name>/config.json`
+File: `/tmp/<app-name>-update/apps/<app-name>/config.json`
 
 Changes to make:
 1. `"version"`: set to new version string (match existing format exactly)
@@ -123,7 +162,7 @@ python3 -c "import time; print(int(time.time() * 1000))"
 
 ## Step 5 — Update docker-compose.json
 
-File: `/private/tmp/<app-name>-update/apps/<app-name>/docker-compose.json`
+File: `/tmp/<app-name>-update/apps/<app-name>/docker-compose.json`
 
 Changes to make:
 1. Update **all** `"image"` fields that contain the old version string to the new version across every service
@@ -136,7 +175,7 @@ Changes to make:
 ## Step 6 — Run tests
 
 ```bash
-cd /private/tmp/<app-name>-update && bun install && bun run test
+cd /tmp/<app-name>-update && bun install && bun run test
 ```
 
 If tests fail: read the error, fix the issue, re-run. Do NOT proceed until all tests pass.
@@ -147,19 +186,28 @@ If tests fail: read the error, fix the issue, re-run. Do NOT proceed until all t
 
 Commit and push from **inside the worktree**. Use `--head` and `--base` explicitly with `gh pr create` — omitting them fails from a worktree context.
 
-```bash
-cd /private/tmp/<app-name>-update
+**NOTE**: If git commands fail with "fatal: this operation must be run in a work tree", set explicit environment variables:
 
+```bash
+export GIT_DIR="$BARE_REPO/worktrees/<app-name>-update"
+export GIT_WORK_TREE=/tmp/<app-name>-update
+```
+
+Then run all subsequent git commands normally.
+
+```bash
 git add apps/<app-name>/config.json apps/<app-name>/docker-compose.json
 git commit --no-gpg-sign -m "Update <AppName> to <new-version>"
 git push -u origin update-<app-name>-<new-version>
 
 gh pr create \
+  --repo "$GH_REPO" \
   --head update-<app-name>-<new-version> \
   --base main \
   --title "Update <AppName> to <new-version>" \
   --body "..."
 
+# Open PR in browser for review
 open <PR_URL>
 ```
 
@@ -189,9 +237,10 @@ PR body template:
 - **NEVER** touch unrelated apps
 - **NEVER** change `config.json` fields other than `version`, `tipi_version`, `updated_at`, and `form_fields`
 - **NEVER** use `latest` as an image tag — always pin to the exact version
-- **NEVER** run `git worktree add ... origin/main` — that reference does not exist in this bare repo; always `fetch origin main` first and use `FETCH_HEAD`
+- **ALWAYS** fetch with explicit refspec `+refs/heads/main:refs/remotes/origin/main` to create proper `origin/main` reference, then use `origin/main` in worktree commands (never use `FETCH_HEAD` which can be stale)
 - **NEVER** run `gh pr create` without `--head` and `--base` — it will fail from a worktree
 - **NEVER** run a separate `git checkout -b` after `worktree add` — the branch is created inline
+- If git commands in the worktree fail with "must be run in a work tree", explicitly set `GIT_DIR` and `GIT_WORK_TREE` env vars (see Step 7 troubleshooting)
 - If the app is already at the latest version, stop and say so
 - If no `.env.example` or compose file is found via `gh api`, skip env var detection and note it in the PR body
 - Match the **exact version string format** already used in `config.json`
