@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "services": [
+    {
+      "name": "shelfmark",
+      "image": "ghcr.io/calibrain/shelfmark:v1.2.2",
+      "isMain": true,
+      "internalPort": 8084,
+      "environment": [
+        {"key": "PUID", "value": "${PUID}"},
+        {"key": "PGID", "value": "${PGID}"},
+        {"key": "TIMEZONE", "value": "${TIMEZONE}"},
+        {"key": "DOCKERMODE", "value": "true"},
+        {"key": "CONFIG_DIR", "value": "/config"},
+        {"key": "INGEST_DIR", "value": "/books"}
+      ],
+      "volumes": [
+        {"hostPath": "${APP_DATA_DIR}/data/config", "containerPath": "/config"},
+        {"hostPath": "${ROOT_FOLDER_HOST}/media/data/books", "containerPath": "/books"}
+      ]
+    }
+  ]
+}

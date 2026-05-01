@@ -1,0 +1,45 @@
+{
+  "name": "Shelfmark",
+  "id": "shelfmark",
+  "available": true,
+  "short_desc": "Self-hosted book and audiobook search and download hub",
+  "author": "calibrain",
+  "port": 8084,
+  "categories": ["books", "media"],
+  "description": "Shelfmark is a self-hosted web interface for discovering and downloading books and audiobooks from multiple sources. It aggregates web, torrent, usenet, and IRC sources into a unified search interface with metadata enrichment from Hardcover, Open Library, and Google Books. Supports multi-user request workflows, real-time download progress tracking, and integrations with Calibre, Calibre-Web, Grimmory, and Audiobookshelf.",
+  "tipi_version": 1,
+  "version": "v1.2.2",
+  "source": "https://github.com/calibrain/shelfmark",
+  "website": "https://github.com/calibrain/shelfmark",
+  "exposable": true,
+  "force_expose": false,
+  "supported_architectures": ["amd64", "arm64"],
+  "form_fields": [
+    {
+      "type": "text",
+      "label": "Timezone",
+      "env_variable": "TIMEZONE",
+      "required": false,
+      "default": "UTC",
+      "hint": "e.g. America/New_York"
+    },
+    {
+      "type": "text",
+      "label": "User ID (PUID)",
+      "env_variable": "PUID",
+      "required": false,
+      "default": "1000"
+    },
+    {
+      "type": "text",
+      "label": "Group ID (PGID)",
+      "env_variable": "PGID",
+      "required": false,
+      "default": "1000"
+    }
+  ],
+  "dynamic_config": true,
+  "min_tipi_version": "v4.0.0",
+  "created_at": 1777651626000,
+  "updated_at": 1777651626000
+}
