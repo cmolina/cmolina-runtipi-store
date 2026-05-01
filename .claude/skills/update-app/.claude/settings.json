@@ -4,7 +4,11 @@
       "Bash(gh release *)",
       "Bash(gh api *)",
       "Bash(bun run test)",
-      "Bash(open *)"
+      "Bash(open *)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:hub.docker.com)"
     ]
   }
 }
