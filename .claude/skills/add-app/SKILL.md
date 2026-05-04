@@ -46,43 +46,39 @@ Search extensively for **$ARGUMENTS** to gather:
 
 This is a bare git repo. All work must happen in a worktree checked out from `origin/main`.
 
-First, detect the bare repo root and GitHub repo name:
+First, resolve the bare repo path (works regardless of where the repo was cloned):
 
 ```bash
-# Get bare repo root (run from anywhere inside the repo)
-BARE_REPO=$(git rev-parse --absolute-git-dir)
-
-# Get GitHub repo (e.g. "owner/repo")
-GH_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+REPO_DIR=$(git rev-parse --absolute-git-dir)
 ```
 
-Then create the worktree:
+**NEVER run `git status` or `git diff` with `-C` on the bare repo** — those require a work tree and will fail with `fatal: this operation must be run in a work tree`.
 
 ```bash
 # Fetch main with explicit refspec to create proper origin/main reference
-git -C "$BARE_REPO" fetch origin +refs/heads/main:refs/remotes/origin/main
+git -C $REPO_DIR fetch origin +refs/heads/main:refs/remotes/origin/main
 
 # Remove any stale worktree
-git -C "$BARE_REPO" worktree remove --force /tmp/add-<app-id> 2>/dev/null || true
-rm -rf /tmp/add-<app-id>
-git -C "$BARE_REPO" worktree prune
+git -C $REPO_DIR worktree remove --force $REPO_DIR/add-<app-id> 2>/dev/null || true
+rm -rf $REPO_DIR/add-<app-id>
+git -C $REPO_DIR worktree prune
 
 # Create worktree from origin/main on a new branch
-git -C "$BARE_REPO" worktree add /tmp/add-<app-id> -b add-<app-id> origin/main
+git -C $REPO_DIR worktree add $REPO_DIR/add-<app-id> -b add-<app-id> origin/main
 
 # Now create the app directory inside the worktree
-mkdir -p /tmp/add-<app-id>/apps/<app-id>/metadata
+mkdir -p $REPO_DIR/add-<app-id>/apps/<app-id>/metadata
 ```
 
 The `<app-id>` must be lowercase kebab-case (e.g., `my-app`).
 
-**All subsequent file creation/editing must use paths inside `/tmp/add-<app-id>/apps/<app-id>/`**
+**All subsequent file creation/editing must use paths inside `$REPO_DIR/add-<app-id>/apps/<app-id>/`**
 
 ---
 
 ## Step 3: Create config.json
 
-Create at `/tmp/add-<app-id>/apps/<app-id>/config.json`
+Create at `$REPO_DIR/add-<app-id>/apps/<app-id>/config.json`
 
 Use this structure — reference existing apps `apps/dawarich/config.json` and `apps/whoami/config.json` for style:
 
@@ -127,7 +123,7 @@ For each environment variable the user needs to configure:
 
 ## Step 4: Create docker-compose.json
 
-Create at `/tmp/add-<app-id>/apps/<app-id>/docker-compose.json`
+Create at `$REPO_DIR/add-<app-id>/apps/<app-id>/docker-compose.json`
 
 Use dynamic compose schema v2. Reference `apps/dawarich/docker-compose.json` for multi-service and `apps/whoami/docker-compose.json` for single-service examples.
 
@@ -198,7 +194,7 @@ Runtipi provides built-in environment variables you MUST use for volumes:
 
 ## Step 5: Create metadata/description.md
 
-Create at `/tmp/add-<app-id>/apps/<app-id>/metadata/description.md`
+Create at `$REPO_DIR/add-<app-id>/apps/<app-id>/metadata/description.md`
 
 Write a markdown description with:
 - What the app is and what problem it solves
@@ -211,7 +207,7 @@ Reference `apps/dawarich/metadata/description.md` for style.
 
 ## Step 6: Download logo
 
-Download the app's official logo/icon and save it as `/tmp/add-<app-id>/apps/<app-id>/metadata/logo.jpg`.
+Download the app's official logo/icon and save it as `$REPO_DIR/add-<app-id>/apps/<app-id>/metadata/logo.jpg`.
 
 - Try the GitHub repo's avatar, social preview, or icon from the app's website
 - If the source is PNG, convert to JPG: `sips -s format jpeg logo.png --out logo.jpg` (macOS)
@@ -223,7 +219,7 @@ Download the app's official logo/icon and save it as `/tmp/add-<app-id>/apps/<ap
 ## Step 7: Run tests
 
 ```bash
-cd /tmp/add-<app-id> && bun install && bun run test
+cd $REPO_DIR/add-<app-id> && bun install && bun run test
 ```
 
 Tests validate:
@@ -247,13 +243,15 @@ Once tests pass, commit from the worktree:
 **NOTE**: If git commands fail with "fatal: this operation must be run in a work tree", set explicit environment variables:
 
 ```bash
-export GIT_DIR="$BARE_REPO/worktrees/add-<app-id>"
-export GIT_WORK_TREE=/tmp/add-<app-id>
+export GIT_DIR=$REPO_DIR/worktrees/add-<app-id>
+export GIT_WORK_TREE=$REPO_DIR/add-<app-id>
 ```
 
 Then run all subsequent git commands normally.
 
 ```bash
+GH_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+
 git add apps/<app-id>/
 git commit --no-gpg-sign -m "Add <App Name> app - <short description>"
 git push -u origin add-<app-id>

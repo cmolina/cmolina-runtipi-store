@@ -7,8 +7,8 @@
   "port": 3030,
   "categories": ["utilities", "network"],
   "description": "Dawarich is a self-hosted alternative to Google Location History. Track your location history, visualize it on a map, and have complete control over your data.",
-  "tipi_version": 15,
-  "version": "1.7.2",
+  "tipi_version": 16,
+  "version": "1.7.5",
   "source": "https://github.com/Freika/dawarich",
   "website": "https://dawarich.app",
   "exposable": true,
@@ -37,10 +37,12 @@
     { "type": "text", "label": "OIDC Redirect URI", "env_variable": "OIDC_REDIRECT_URI", "required": false, "hint": "Callback URL, e.g. https://dawarich.example.com/users/auth/openid_connect/callback" },
     { "type": "text", "label": "OIDC Provider Name", "env_variable": "OIDC_PROVIDER_NAME", "default": "Openid Connect", "required": false, "hint": "Display name for the OIDC provider on the sign-in page (e.g. Authentik, Authelia)" },
     { "type": "boolean", "label": "OIDC Auto Register", "env_variable": "OIDC_AUTO_REGISTER", "default": true, "required": false, "hint": "Automatically create new users when signing in with OIDC" },
-    { "type": "boolean", "label": "Allow Email/Password Registration", "env_variable": "ALLOW_EMAIL_PASSWORD_REGISTRATION", "default": false, "required": false, "hint": "Allow public email/password registration alongside OIDC" }
+    { "type": "boolean", "label": "Allow Email/Password Registration", "env_variable": "ALLOW_EMAIL_PASSWORD_REGISTRATION", "default": false, "required": false, "hint": "Allow public email/password registration alongside OIDC" },
+    { "type": "text", "label": "Metrics Username", "env_variable": "METRICS_USERNAME", "required": false, "hint": "Username for /metrics endpoint (required to enable Prometheus scraping)" },
+    { "type": "password", "label": "Metrics Password", "env_variable": "METRICS_PASSWORD", "required": false, "hint": "Password for /metrics endpoint (required to enable Prometheus scraping)" }
   ],
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
   "created_at": 1738700000000,
-  "updated_at": 1777579747479
+  "updated_at": 1777870484375
 }

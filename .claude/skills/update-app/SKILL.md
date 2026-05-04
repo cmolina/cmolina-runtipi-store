@@ -19,35 +19,38 @@ Given an app name (e.g., `dawarich`), I:
 
 ---
 
-## Step 0 — Read current version from the bare repo
+## Step 0 — Fetch origin/main and read current version
 
-The repo is a **bare git repo**. There is no checkout at the repo root — always run git commands with `-C <bare-repo-root>` or from inside a worktree.
+The repo is a **bare git repo** at `$REPO_DIR`. There is no checkout at the repo root — always run git commands with `-C $REPO_DIR` or from inside a worktree.
 
-First, detect the bare repo root and GitHub repo name:
+First, resolve the bare repo path (works regardless of where the repo was cloned):
 
 ```bash
-# Get bare repo root (run from anywhere inside the repo)
-BARE_REPO=$(git rev-parse --absolute-git-dir)
-
-# Get GitHub repo (e.g. "owner/repo")
-GH_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+REPO_DIR=$(git rev-parse --absolute-git-dir)
 ```
 
-Read the current app config directly from the `main` branch without needing any worktree:
+**NEVER run `git status` or `git diff` with `-C` on the bare repo** — those commands require a work tree and will fail with `fatal: this operation must be run in a work tree`. Only run them inside a worktree (Step 2+).
+
+**ALWAYS fetch origin/main first** before reading any files — the local `main` ref may be stale:
 
 ```bash
-git -C "$BARE_REPO" show main:apps/<app-name>/config.json
+git -C $REPO_DIR fetch origin +refs/heads/main:refs/remotes/origin/main
+```
+
+Then read the current app config from `origin/main` (not `main`):
+
+```bash
+git -C $REPO_DIR show origin/main:apps/<app-name>/config.json
 ```
 
 Extract `version` and `source` fields. Parse `source` to get the GitHub owner/repo (e.g., `https://github.com/Freika/dawarich` → `Freika/dawarich`).
 
 ---
 
-## Step 1 — Fetch latest GitHub release
+## Step 1 — Fetch latest GitHub release and all skipped versions
 
 ```bash
-gh release list --repo <owner>/<repo> --limit 5
-gh release view --repo <owner>/<repo> --json tagName,body
+gh release list --repo <owner>/<repo> --limit 20
 ```
 
 Pick the **latest stable** tag — skip pre-releases (`-rc.`, `-beta.`, `-alpha.`).
@@ -56,35 +59,36 @@ Extract the **latest stable version tag** (strip leading `v` if needed — match
 
 If the latest release tag matches the current `version` field → print "Already up to date at <version>" and **stop**.
 
-Also capture the release **body/notes** — needed to detect new environment variables.
+**Collect release notes for ALL skipped versions** (every stable release between current version and the latest, inclusive of the latest). Fetch each one:
+
+```bash
+gh release view <tag> --repo <owner>/<repo> --json tagName,body
+```
+
+Concatenate these into a `$SKIPPED_RELEASE_NOTES` variable ordered from oldest-skipped to newest. This consolidated body is used in Step 3 for env var detection and in the PR body.
 
 ---
 
 ## Step 2 — Create a fresh git worktree from latest origin/main
 
-Worktrees go in `/tmp/`. The branch is created inline during `worktree add` — do NOT run a separate `git checkout -b` afterward.
+Worktrees go in `/private/tmp/`. The branch is created inline during `worktree add` — do NOT run a separate `git checkout -b` afterward.
 
-**CRITICAL**: Must fetch with explicit refspec to create proper `origin/main` reference, then use that reference directly (not FETCH_HEAD which can be stale).
+The fetch was already done in Step 0 — `origin/main` is current. Just verify, clean, and create:
 
 ```bash
-# Fetch main from origin with explicit refspec to create origin/main reference
-git -C "$BARE_REPO" fetch origin +refs/heads/main:refs/remotes/origin/main
-
 # Verify we have the latest
-git -C "$BARE_REPO" log origin/main --oneline -1
+git -C $REPO_DIR log origin/main --oneline -1
 
 # Remove any stale worktree at that path
-git -C "$BARE_REPO" worktree remove --force /tmp/<app-name>-update 2>/dev/null || true
-rm -rf /tmp/<app-name>-update
-git -C "$BARE_REPO" worktree prune
+git -C $REPO_DIR worktree remove --force $REPO_DIR/<app-name>-update 2>/dev/null || true
+rm -rf $REPO_DIR/<app-name>-update
+git -C $REPO_DIR worktree prune
 
 # Create the worktree on a new branch pointing at origin/main (latest)
-git -C "$BARE_REPO" worktree add /tmp/<app-name>-update -b update-<app-name>-<new-version> origin/main
+git -C $REPO_DIR worktree add $REPO_DIR/<app-name>-update -b update-<app-name>-<new-version> origin/main
 ```
 
-**IMPORTANT**: Always use `origin/main` reference after fetching with the explicit refspec. This ensures you're working from the latest remote main, not a cached/stale FETCH_HEAD.
-
-All subsequent file edits happen inside `/tmp/<app-name>-update/apps/<app-name>/`.
+All subsequent file edits happen inside `$REPO_DIR/<app-name>-update/apps/<app-name>/`.
 
 ---
 
@@ -94,7 +98,7 @@ Use **two complementary sources** — the release body AND the upstream compose 
 
 ### 3a — Scan the release body for env var mentions
 
-The release body was already captured in Step 1. Scan it for:
+Use the consolidated `$SKIPPED_RELEASE_NOTES` from Step 1 (all skipped versions). Scan it for:
 - Any `UPPER_SNAKE_CASE` tokens that look like env var names
 - Explicit migration instructions (e.g. "set these env vars", "required in production")
 - Linked issues or comments — if the release references an issue/comment URL, fetch it with `gh api` and extract any env var names mentioned there
@@ -143,7 +147,7 @@ For each new env var:
 
 ## Step 4 — Update config.json
 
-File: `/tmp/<app-name>-update/apps/<app-name>/config.json`
+File: `$REPO_DIR/<app-name>-update/apps/<app-name>/config.json`
 
 Changes to make:
 1. `"version"`: set to new version string (match existing format exactly)
@@ -162,7 +166,7 @@ python3 -c "import time; print(int(time.time() * 1000))"
 
 ## Step 5 — Update docker-compose.json
 
-File: `/tmp/<app-name>-update/apps/<app-name>/docker-compose.json`
+File: `$REPO_DIR/<app-name>-update/apps/<app-name>/docker-compose.json`
 
 Changes to make:
 1. Update **all** `"image"` fields that contain the old version string to the new version across every service
@@ -175,7 +179,7 @@ Changes to make:
 ## Step 6 — Run tests
 
 ```bash
-cd /tmp/<app-name>-update && bun install && bun run test
+cd $REPO_DIR/<app-name>-update && bun install && bun run test
 ```
 
 If tests fail: read the error, fix the issue, re-run. Do NOT proceed until all tests pass.
@@ -189,8 +193,8 @@ Commit and push from **inside the worktree**. Use `--head` and `--base` explicit
 **NOTE**: If git commands fail with "fatal: this operation must be run in a work tree", set explicit environment variables:
 
 ```bash
-export GIT_DIR="$BARE_REPO/worktrees/<app-name>-update"
-export GIT_WORK_TREE=/tmp/<app-name>-update
+export GIT_DIR=$REPO_DIR/worktrees/<app-name>-update
+export GIT_WORK_TREE=$REPO_DIR/<app-name>-update
 ```
 
 Then run all subsequent git commands normally.
@@ -201,7 +205,6 @@ git commit --no-gpg-sign -m "Update <AppName> to <new-version>"
 git push -u origin update-<app-name>-<new-version>
 
 gh pr create \
-  --repo "$GH_REPO" \
   --head update-<app-name>-<new-version> \
   --base main \
   --title "Update <AppName> to <new-version>" \
@@ -221,7 +224,12 @@ PR body template:
 - Added new environment variables: <list them, or omit section if none>
 
 ### Release notes
-<paste first 10-20 lines of the GitHub release body>
+<!-- Include ALL skipped versions, oldest first. If only one version was skipped, one section is fine. -->
+#### <intermediate-version-1> (if any)
+<release notes for that version>
+
+#### <new-version>
+<release notes for latest version>
 
 ### Checklist
 - [x] Version bumped in config.json and docker-compose.json
@@ -237,7 +245,7 @@ PR body template:
 - **NEVER** touch unrelated apps
 - **NEVER** change `config.json` fields other than `version`, `tipi_version`, `updated_at`, and `form_fields`
 - **NEVER** use `latest` as an image tag — always pin to the exact version
-- **ALWAYS** fetch with explicit refspec `+refs/heads/main:refs/remotes/origin/main` to create proper `origin/main` reference, then use `origin/main` in worktree commands (never use `FETCH_HEAD` which can be stale)
+- **ALWAYS** fetch `origin/main` in Step 0 before reading any files — local `main` may be stale. Use `origin/main` everywhere, never `main` or `FETCH_HEAD`
 - **NEVER** run `gh pr create` without `--head` and `--base` — it will fail from a worktree
 - **NEVER** run a separate `git checkout -b` after `worktree add` — the branch is created inline
 - If git commands in the worktree fail with "must be run in a work tree", explicitly set `GIT_DIR` and `GIT_WORK_TREE` env vars (see Step 7 troubleshooting)
