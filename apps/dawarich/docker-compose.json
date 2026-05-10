@@ -52,7 +52,7 @@
     },
     {
       "name": "dawarich_app",
-      "image": "freikin/dawarich:1.7.5",
+      "image": "freikin/dawarich:1.7.7",
       "isMain": true,
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
@@ -90,8 +90,8 @@
         { "key": "TIME_ZONE", "value": "${TIME_ZONE}" },
         { "key": "APPLICATION_PROTOCOL", "value": "http" },
         { "key": "PROMETHEUS_EXPORTER_ENABLED", "value": "false" },
-        { "key": "PROMETHEUS_EXPORTER_HOST", "value": "0.0.0.0" },
         { "key": "PROMETHEUS_EXPORTER_PORT", "value": "9394" },
+        { "key": "SIDEKIQ_METRICS_URL", "value": "http://dawarich_sidekiq:9394/metrics" },
         { "key": "SECRET_KEY_BASE", "value": "${SECRET_KEY_BASE}" },
         { "key": "OTP_ENCRYPTION_PRIMARY_KEY", "value": "${OTP_ENCRYPTION_PRIMARY_KEY}" },
         { "key": "OTP_ENCRYPTION_DETERMINISTIC_KEY", "value": "${OTP_ENCRYPTION_DETERMINISTIC_KEY}" },
@@ -117,7 +117,10 @@
         { "key": "OIDC_AUTO_REGISTER", "value": "${OIDC_AUTO_REGISTER}" },
         { "key": "ALLOW_EMAIL_PASSWORD_REGISTRATION", "value": "${ALLOW_EMAIL_PASSWORD_REGISTRATION}" },
         { "key": "METRICS_USERNAME", "value": "${METRICS_USERNAME}" },
-        { "key": "METRICS_PASSWORD", "value": "${METRICS_PASSWORD}" }
+        { "key": "METRICS_PASSWORD", "value": "${METRICS_PASSWORD}" },
+        { "key": "SMTP_AUTHENTICATION", "value": "${SMTP_AUTHENTICATION}" },
+        { "key": "SMTP_OPEN_TIMEOUT", "value": "${SMTP_OPEN_TIMEOUT}" },
+        { "key": "SMTP_READ_TIMEOUT", "value": "${SMTP_READ_TIMEOUT}" }
       ],
       "logging": {
         "driver": "json-file",
@@ -148,7 +151,7 @@
     },
     {
       "name": "dawarich_sidekiq",
-      "image": "freikin/dawarich:1.7.5",
+      "image": "freikin/dawarich:1.7.7",
       "isMain": false,
       "entrypoint": "sidekiq-entrypoint.sh",
       "volumes": [
@@ -181,7 +184,6 @@
         { "key": "BACKGROUND_PROCESSING_CONCURRENCY", "value": "5" },
         { "key": "APPLICATION_PROTOCOL", "value": "http" },
         { "key": "PROMETHEUS_EXPORTER_ENABLED", "value": "false" },
-        { "key": "PROMETHEUS_EXPORTER_HOST", "value": "dawarich_app" },
         { "key": "PROMETHEUS_EXPORTER_PORT", "value": "9394" },
         { "key": "SECRET_KEY_BASE", "value": "${SECRET_KEY_BASE}" },
         { "key": "OTP_ENCRYPTION_PRIMARY_KEY", "value": "${OTP_ENCRYPTION_PRIMARY_KEY}" },
