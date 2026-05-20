@@ -8,3 +8,19 @@ iSponsorBlockTV connects to your YouTube TV app and automatically skips sponsore
 - Device discovery via mDNS/SSDP or manual pairing with a YouTube TV code
 - No need to be on the same network after initial setup — only internet access required
 - Configurable via a web-based setup UI on first launch
+
+## Initial Setup
+
+Run the interactive CLI setup after installing the app:
+
+```bash
+CONTAINER=$(sudo docker ps --filter name=isponsorblocktv --format "{{.Names}}" | head -1)
+IMAGE=$(sudo docker inspect "$CONTAINER" --format '{{.Config.Image}}')
+DATA=$(sudo docker inspect "$CONTAINER" --format '{{range .Mounts}}{{if eq .Destination "/app/data"}}{{.Source}}{{end}}{{end}}')
+
+sudo docker run -it --rm \
+    --network host \
+    -v "$DATA:/app/data" \
+    "$IMAGE" \
+    --setup-cli
+```
