@@ -7,8 +7,8 @@
   "port": 3030,
   "categories": ["utilities", "network"],
   "description": "Dawarich is a self-hosted alternative to Google Location History. Track your location history, visualize it on a map, and have complete control over your data.",
-  "tipi_version": 18,
-  "version": "1.7.8",
+  "tipi_version": 19,
+  "version": "1.7.9",
   "source": "https://github.com/Freika/dawarich",
   "website": "https://dawarich.app",
   "exposable": true,
@@ -39,6 +39,7 @@
     { "type": "boolean", "label": "OIDC Auto Register", "env_variable": "OIDC_AUTO_REGISTER", "default": true, "required": false, "hint": "Automatically create new users when signing in with OIDC" },
     { "type": "boolean", "label": "Allow Email/Password Registration", "env_variable": "ALLOW_EMAIL_PASSWORD_REGISTRATION", "default": false, "required": false, "hint": "Allow public email/password registration alongside OIDC" },
     { "type": "boolean", "label": "Allow Email/Password Login", "env_variable": "ALLOW_EMAIL_PASSWORD_LOGIN", "default": true, "required": false, "hint": "Show email/password login form when OIDC is enabled. Set to false to enforce OIDC-only sign-in." },
+    { "type": "boolean", "label": "OIDC PKCE Enabled", "env_variable": "OIDC_PKCE_ENABLED", "default": false, "required": false, "hint": "Enable PKCE for the OIDC flow. Required by some providers that enforce PKCE." },
     { "type": "text", "label": "Metrics Username", "env_variable": "METRICS_USERNAME", "required": false, "hint": "Username for /metrics endpoint (required to enable Prometheus scraping)" },
     { "type": "password", "label": "Metrics Password", "env_variable": "METRICS_PASSWORD", "required": false, "hint": "Password for /metrics endpoint (required to enable Prometheus scraping)" },
     { "type": "text", "label": "SMTP Authentication", "env_variable": "SMTP_AUTHENTICATION", "required": false, "hint": "SMTP authentication type, e.g. plain, login, cram_md5 (useful for Office 365 and similar)" },
@@ -48,5 +49,5 @@
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
   "created_at": 1738700000000,
-  "updated_at": 1778968295779
+  "updated_at": 1779391479456
 }
