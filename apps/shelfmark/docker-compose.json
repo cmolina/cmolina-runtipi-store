@@ -3,7 +3,7 @@
   "services": [
     {
       "name": "shelfmark",
-      "image": "ghcr.io/calibrain/shelfmark:v1.2.2",
+      "image": "ghcr.io/calibrain/shelfmark:v1.3.0",
       "isMain": true,
       "internalPort": 8084,
       "environment": [
@@ -12,7 +12,8 @@
         {"key": "TIMEZONE", "value": "${TIMEZONE}"},
         {"key": "DOCKERMODE", "value": "true"},
         {"key": "CONFIG_DIR", "value": "/config"},
-        {"key": "INGEST_DIR", "value": "/books"}
+        {"key": "INGEST_DIR", "value": "/books"},
+        {"key": "DISABLE_LOCAL_AUTH", "value": "${DISABLE_LOCAL_AUTH}"}
       ],
       "volumes": [
         {"hostPath": "${APP_DATA_DIR}/data/config", "containerPath": "/config"},
