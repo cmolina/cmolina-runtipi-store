@@ -1,6 +1,6 @@
 ---
 name: update-app
-description: Update an existing runtipi store app to its latest version — fetches the latest GitHub release, bumps version in config.json and docker-compose.json, detects new env vars, adds missing form_fields, runs tests, and opens a PR. Triggered by /update-app <app_name>.
+description: Update an existing runtipi store app to its latest version — fetches the latest GitHub release, bumps version in config.json and docker-compose.json, detects new env vars, adds missing form_fields, runs tests, and opens a PR. Triggered by /update-app <app_name>. If no app name is given, updates ALL apps in one PR with a commit per app.
 license: MIT
 compatibility: claude-code
 metadata:
@@ -10,12 +10,106 @@ metadata:
 
 ## What I do
 
-Given an app name (e.g., `dawarich`), I:
+**Single-app mode** (`/update-app <app_name>`): given an app name (e.g., `dawarich`), I:
 
 1. Fetch the latest release tag from GitHub
 2. Compare it with the current version in `apps/<app>/config.json`
 3. If already up to date — stop and say so
 4. Otherwise: create a new git worktree from `origin/main`, update all version strings, detect new env vars, update `form_fields` and `docker-compose.json` environment sections, bump `tipi_version` and `updated_at`, run tests, ship a PR, and open it in the browser
+
+**Bulk mode** (`/update-app` — no argument): runs the same update logic for every app found in `apps/`, creates one commit per updated app in a single worktree/branch, then opens one consolidated PR.
+
+---
+
+## Bulk mode (no app name passed)
+
+When `/update-app` is invoked with no argument, follow this sequence instead of the single-app flow:
+
+### B0 — Fetch origin/main and list all apps
+
+```bash
+REPO_DIR=$(git rev-parse --absolute-git-dir)
+git -C $REPO_DIR fetch origin +refs/heads/main:refs/remotes/origin/main
+APPS=$(git -C $REPO_DIR ls-tree --name-only origin/main apps/)
+```
+
+### B1 — Create a single shared worktree
+
+```bash
+BRANCH=update-all-apps-$(date +%Y-%m-%d)
+git -C $REPO_DIR worktree remove --force $REPO_DIR/all-apps-update 2>/dev/null || true
+rm -rf $REPO_DIR/all-apps-update
+git -C $REPO_DIR worktree prune
+git -C $REPO_DIR worktree add $REPO_DIR/all-apps-update -b $BRANCH origin/main
+```
+
+All file edits for all apps happen inside this single worktree.
+
+### B2 — Iterate over each app
+
+For each app in `$APPS`, run **Steps 0 through 5** from the single-app flow (adapted):
+- **Step 0 variant**: read `config.json` from the worktree file (`$REPO_DIR/all-apps-update/apps/<app>/config.json`) instead of `git show origin/main:…` — the worktree already has the latest main. Still fetch the GitHub release (Step 1) to compare.
+- **Step 1**: fetch latest release, compare versions. If already up to date → skip this app (add to "already up to date" list, continue to next app).
+- **Steps 3–5**: detect env vars, update `config.json` and `docker-compose.json` exactly as in single-app mode.
+- After updating each app's files, create a commit for that app only:
+
+```bash
+cd $REPO_DIR/all-apps-update
+git add apps/<app>/config.json apps/<app>/docker-compose.json
+git commit --no-gpg-sign -m "Update <AppName> to <new-version>"
+```
+
+Collect a summary for each processed app: `{ app, old_version, new_version, new_env_vars[], release_notes }`.
+
+If **no** apps needed an update after iterating all of them → print "All apps already up to date" and stop without opening a PR.
+
+### B3 — Run tests once
+
+After all apps are committed:
+
+```bash
+cd $REPO_DIR/all-apps-update && bun install && bun run test
+```
+
+If tests fail: read the error, fix the issue, re-run. Do NOT proceed until all tests pass.
+
+### B4 — Push and open one PR
+
+```bash
+cd $REPO_DIR/all-apps-update
+git push -u origin $BRANCH
+
+gh pr create \
+  --head $BRANCH \
+  --base main \
+  --title "Update all apps ($(date +%Y-%m-%d))" \
+  --body "..."
+
+open <PR_URL>
+```
+
+PR body template for bulk mode:
+```markdown
+## Bulk app update — <date>
+
+### Updated apps
+| App | Old version | New version | New env vars |
+|-----|-------------|-------------|--------------|
+| <app> | `<old>` | `<new>` | `VAR1`, `VAR2` or — |
+
+### Skipped (already up to date)
+<comma-separated list, or "none">
+
+### Release notes
+<!-- One section per updated app -->
+#### <AppName> <old> → <new>
+<consolidated release notes for all skipped versions>
+
+### Checklist
+- [x] Each app version bumped in config.json and docker-compose.json
+- [x] tipi_version incremented per app
+- [x] Tests pass (`bun run test`)
+```
 
 ---
 
