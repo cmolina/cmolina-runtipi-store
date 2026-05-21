@@ -3,11 +3,12 @@
   "services": [
     {
       "name": "bentopdf",
-      "image": "ghcr.io/alam00000/bentopdf:2.7.0",
+      "image": "ghcr.io/alam00000/bentopdf:2.8.4",
       "isMain": true,
       "internalPort": 8080,
       "environment": [
-        { "key": "DISABLE_IPV6", "value": "${DISABLE_IPV6}" }
+        { "key": "DISABLE_IPV6", "value": "${DISABLE_IPV6}" },
+        { "key": "DISABLE_TOOLS", "value": "${DISABLE_TOOLS}" }
       ]
     }
   ]

@@ -52,7 +52,7 @@
     },
     {
       "name": "dawarich_app",
-      "image": "freikin/dawarich:1.7.8",
+      "image": "freikin/dawarich:1.7.9",
       "isMain": true,
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
@@ -115,6 +115,7 @@
         { "key": "OIDC_REDIRECT_URI", "value": "${OIDC_REDIRECT_URI}" },
         { "key": "OIDC_PROVIDER_NAME", "value": "${OIDC_PROVIDER_NAME}" },
         { "key": "OIDC_AUTO_REGISTER", "value": "${OIDC_AUTO_REGISTER}" },
+        { "key": "OIDC_PKCE_ENABLED", "value": "${OIDC_PKCE_ENABLED}" },
         { "key": "ALLOW_EMAIL_PASSWORD_REGISTRATION", "value": "${ALLOW_EMAIL_PASSWORD_REGISTRATION}" },
         { "key": "ALLOW_EMAIL_PASSWORD_LOGIN", "value": "${ALLOW_EMAIL_PASSWORD_LOGIN}" },
         { "key": "METRICS_USERNAME", "value": "${METRICS_USERNAME}" },
@@ -152,7 +153,7 @@
     },
     {
       "name": "dawarich_sidekiq",
-      "image": "freikin/dawarich:1.7.8",
+      "image": "freikin/dawarich:1.7.9",
       "isMain": false,
       "entrypoint": "sidekiq-entrypoint.sh",
       "volumes": [
