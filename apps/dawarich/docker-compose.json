@@ -52,7 +52,7 @@
     },
     {
       "name": "dawarich_app",
-      "image": "freikin/dawarich:1.7.9",
+      "image": "freikin/dawarich:1.7.10",
       "isMain": true,
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
@@ -153,7 +153,7 @@
     },
     {
       "name": "dawarich_sidekiq",
-      "image": "freikin/dawarich:1.7.9",
+      "image": "freikin/dawarich:1.7.10",
       "isMain": false,
       "entrypoint": "sidekiq-entrypoint.sh",
       "volumes": [
