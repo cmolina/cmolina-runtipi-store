@@ -7,8 +7,8 @@
   "port": 8080,
   "categories": ["utilities"],
   "description": "BentoPDF is a powerful, privacy-first PDF toolkit that runs entirely in your browser. Merge, split, edit, convert, compress, encrypt, sign, OCR, and watermark PDFs without uploading files to any server. Self-hostable with 100+ tools and no usage limits.",
-  "tipi_version": 2,
-  "version": "2.8.4",
+  "tipi_version": 3,
+  "version": "2.8.5",
   "source": "https://github.com/alam00000/bentopdf",
   "website": "https://bentopdf.com",
   "exposable": true,
@@ -21,5 +21,5 @@
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
   "created_at": 1743109200000,
-  "updated_at": 1779391479456
+  "updated_at": 1780158796129
 }
