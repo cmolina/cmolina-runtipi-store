@@ -16,6 +16,7 @@
           "containerPath": "/var/lib/postgresql/data"
         }
       ],
+      "restart": "always",
       "healthCheck": {
         "test": "pg_isready -U airtrail -d airtrail",
         "interval": "10s",
@@ -30,7 +31,7 @@
       "isMain": true,
       "internalPort": 3000,
       "environment": [
-        { "key": "ORIGIN", "value": "http://${APP_HOST}:${APP_PORT}" },
+        { "key": "ORIGIN", "value": "${APP_PROTOCOL}://${APP_DOMAIN}" },
         { "key": "DB_URL", "value": "postgres://airtrail:${AIRTRAIL_DB_PASSWORD}@airtrail-db:5432/airtrail" },
         { "key": "DB_PASSWORD", "value": "${AIRTRAIL_DB_PASSWORD}" },
         { "key": "DB_DATABASE_NAME", "value": "airtrail" },
@@ -43,6 +44,7 @@
           "containerPath": "/app/uploads"
         }
       ],
+      "restart": "unless-stopped",
       "dependsOn": {
         "airtrail-db": { "condition": "service_healthy" }
       }
