@@ -1,0 +1,188 @@
+name: Deploy Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'apps/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed apps
+        id: apps
+        run: |
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- apps/ \
+            | grep -oP '^apps/\K[^/]+' | sort -u | tr '\n' ' ')
+          echo "list=${CHANGED}" >> "$GITHUB_OUTPUT"
+
+      - name: Install oathtool
+        if: steps.apps.outputs.list != ''
+        run: sudo apt-get install -y oathtool
+
+      - name: Authenticate with runtipi
+        if: steps.apps.outputs.list != ''
+        env:
+          RUNTIPI_URL: ${{ secrets.RUNTIPI_URL }}
+          RUNTIPI_ADMIN: ${{ secrets.RUNTIPI_ADMIN }}
+          RUNTIPI_PASSWORD: ${{ secrets.RUNTIPI_PASSWORD }}
+          RUNTIPI_TOTP_SECRET: ${{ secrets.RUNTIPI_TOTP_SECRET }}
+          CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
+        run: |
+          LOGIN_BODY=$(python3 -c "
+          import json, os
+          print(json.dumps({'username': os.environ['RUNTIPI_ADMIN'], 'password': os.environ['RUNTIPI_PASSWORD']}))
+          ")
+
+          RESPONSE=$(curl -sf -c /tmp/jar \
+            -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "$LOGIN_BODY" \
+            "$RUNTIPI_URL/api/auth/login")
+
+          TOTP_SESSION=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['totpSessionId'])")
+          TOTP_CODE=$(oathtool --totp --base32 "$RUNTIPI_TOTP_SECRET")
+
+          VERIFY_BODY=$(python3 -c "
+          import json, sys
+          print(json.dumps({'totpCode': sys.argv[1], 'totpSessionId': sys.argv[2]}))
+          " "$TOTP_CODE" "$TOTP_SESSION")
+
+          curl -sf -b /tmp/jar -c /tmp/jar \
+            -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "$VERIFY_BODY" \
+            "$RUNTIPI_URL/api/auth/verify-totp"
+
+      - name: Create and sync preview store
+        if: steps.apps.outputs.list != ''
+        env:
+          RUNTIPI_URL: ${{ secrets.RUNTIPI_URL }}
+          CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
+        run: |
+          STORE="pr-${{ github.event.number }}"
+          BRANCH_URL="https://github.com/${{ github.repository }}/tree/${{ github.head_ref }}"
+
+          CREATE_BODY=$(python3 -c "
+          import json, sys
+          print(json.dumps({'name': sys.argv[1], 'url': sys.argv[2]}))
+          " "$STORE" "$BRANCH_URL")
+
+          # Create store; ignore error on re-runs when it already exists
+          curl -s -b /tmp/jar \
+            -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "$CREATE_BODY" \
+            "$RUNTIPI_URL/api/marketplace/create" || true
+
+          curl -sf -b /tmp/jar \
+            -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+            "$RUNTIPI_URL/api/marketplace/pull"
+
+      - name: Install apps
+        if: steps.apps.outputs.list != ''
+        id: install
+        env:
+          RUNTIPI_URL: ${{ secrets.RUNTIPI_URL }}
+          CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
+        run: |
+          STORE="pr-${{ github.event.number }}"
+
+          cat > /tmp/gen_form.py << 'PYEOF'
+          import json, secrets, sys
+          config = json.load(open(sys.argv[1]))
+          out = {
+              "exposed": True,
+              "domain": f"{config['id']}.cmolina.cl",
+          }
+          for f in config.get("form_fields", []):
+              env = f["env_variable"]
+              t = f["type"]
+              if t == "random":
+                  n = f.get("min", 32)
+                  if f.get("encoding") == "hex":
+                      out[env] = secrets.token_hex((n + 1) // 2)[:n]
+                  else:
+                      out[env] = secrets.token_urlsafe(n)[:n]
+              elif t == "boolean":
+                  out[env] = str(f.get("default", False)).lower()
+              elif f.get("default") is not None:
+                  out[env] = str(f["default"])
+              elif t in ("text", "password") and f.get("required"):
+                  out[env] = "preview-value"
+          print(json.dumps({"form": out}))
+          PYEOF
+
+          RESULTS=""
+
+          for APP_ID in ${{ steps.apps.outputs.list }}; do
+            CONFIG="apps/$APP_ID/config.json"
+            [ -f "$CONFIG" ] || continue
+
+            URN="${APP_ID}:${STORE}"
+
+            # Uninstall first to handle re-runs cleanly
+            curl -s -o /dev/null -b /tmp/jar \
+              -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+              -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+              -H "Content-Type: application/json" \
+              -d '{}' \
+              "$RUNTIPI_URL/api/app-lifecycle/$URN/uninstall" || true
+
+            FORM=$(python3 /tmp/gen_form.py "$CONFIG")
+
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -b /tmp/jar \
+              -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+              -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "$FORM" \
+              "$RUNTIPI_URL/api/app-lifecycle/$URN/install")
+
+            if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
+              RESULTS="${RESULTS}✅ \`${APP_ID}\` → https://${APP_ID}.cmolina.cl (store \`${STORE}\`)\n"
+            else
+              RESULTS="${RESULTS}❌ \`${APP_ID}\` install failed — HTTP ${STATUS}\n"
+            fi
+          done
+
+          {
+            echo "results<<__DELIM__"
+            printf '%b' "$RESULTS"
+            echo "__DELIM__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Comment on PR
+        if: steps.apps.outputs.list != ''
+        uses: actions/github-script@v7
+        env:
+          INSTALL_RESULTS: ${{ steps.install.outputs.results }}
+        with:
+          script: |
+            const store = 'pr-${{ github.event.number }}';
+            const branch = '${{ github.head_ref }}';
+            const results = process.env.INSTALL_RESULTS?.trim() || '_nothing installed_';
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number: context.issue.number,
+              body: [
+                '### Preview Deployment',
+                `Store \`${store}\` synced from branch \`${branch}\``,
+                '',
+                results,
+              ].join('\n'),
+            });
