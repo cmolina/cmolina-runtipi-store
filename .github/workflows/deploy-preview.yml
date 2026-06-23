@@ -108,7 +108,7 @@ jobs:
           config = json.load(open(sys.argv[1]))
           out = {
               "exposed": True,
-              "domain": f"{config['id']}.cmolina.cl",
+              "domain": f"{config['id']}.apps.cmolina.cl",
           }
           for f in config.get("form_fields", []):
               env = f["env_variable"]
@@ -154,7 +154,7 @@ jobs:
               "$RUNTIPI_URL/api/app-lifecycle/$URN/install")
 
             if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
-              RESULTS="${RESULTS}✅ \`${APP_ID}\` → https://${APP_ID}.cmolina.cl (store \`${STORE}\`)\n"
+              RESULTS="${RESULTS}✅ \`${APP_ID}\` → https://${APP_ID}.apps.cmolina.cl (store \`${STORE}\`)\n"
             else
               RESULTS="${RESULTS}❌ \`${APP_ID}\` install failed — HTTP ${STATUS}\n"
             fi
