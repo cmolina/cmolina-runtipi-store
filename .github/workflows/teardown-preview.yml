@@ -1,0 +1,115 @@
+name: Teardown Preview
+
+on:
+  pull_request:
+    types: [closed]
+    paths:
+      - 'apps/**'
+
+jobs:
+  teardown:
+    runs-on: ubuntu-latest
+    permissions:
+      deployments: write
+    env:
+      RUNTIPI_URL: ${{ secrets.RUNTIPI_URL }}
+      CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
+      CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Detect apps in PR
+        id: apps
+        run: |
+          CHANGED=$(git diff --name-only \
+            ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} \
+            -- apps/ \
+            | grep -oP '^apps/\K[^/]+' | sort -u | tr '\n' ' ')
+          echo "list=${CHANGED}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup and authenticate
+        if: steps.apps.outputs.list != ''
+        env:
+          RUNTIPI_ADMIN: ${{ secrets.RUNTIPI_ADMIN }}
+          RUNTIPI_PASSWORD: ${{ secrets.RUNTIPI_PASSWORD }}
+          RUNTIPI_TOTP_SECRET: ${{ secrets.RUNTIPI_TOTP_SECRET }}
+        run: |
+          sudo apt-get install -y oathtool
+
+          cat > /tmp/runtipi.sh << 'EOF'
+          runtipi() {
+            local method="$1" path="$2"
+            shift 2
+            curl -s -b /tmp/jar -c /tmp/jar \
+              -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+              -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+              -H "Content-Type: application/json" \
+              -X "$method" \
+              "$@" \
+              "$RUNTIPI_URL$path"
+          }
+          EOF
+
+          source /tmp/runtipi.sh
+
+          LOGIN=$(python3 -c "
+          import json, os
+          print(json.dumps({'username': os.environ['RUNTIPI_ADMIN'], 'password': os.environ['RUNTIPI_PASSWORD']}))
+          ")
+          RESPONSE=$(runtipi POST /api/auth/login -d "$LOGIN" -f)
+          TOTP_SESSION=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['totpSessionId'])")
+          TOTP_CODE=$(oathtool --totp --base32 "$RUNTIPI_TOTP_SECRET")
+          VERIFY=$(python3 -c "
+          import json, sys
+          print(json.dumps({'totpCode': sys.argv[1], 'totpSessionId': sys.argv[2]}))
+          " "$TOTP_CODE" "$TOTP_SESSION")
+          runtipi POST /api/auth/verify-totp -d "$VERIFY" -f
+
+      - name: Uninstall apps and remove store
+        if: steps.apps.outputs.list != ''
+        run: |
+          source /tmp/runtipi.sh
+          STORE="pr-${{ github.event.number }}"
+
+          for APP_ID in ${{ steps.apps.outputs.list }}; do
+            runtipi POST /api/app-lifecycle/${APP_ID}:${STORE}/uninstall \
+              -d '{}' -o /dev/null || true
+          done
+
+          ALL_STORES=$(runtipi GET /api/marketplace/all)
+          STORE_ID=$(echo "$ALL_STORES" | python3 -c "
+          import json, sys
+          stores = json.load(sys.stdin)
+          target = sys.argv[1]
+          for s in (stores if isinstance(stores, list) else stores.get('data', [])):
+              if s.get('slug') == target or s.get('name') == target:
+                  print(s['id'])
+                  break
+          " "$STORE" 2>/dev/null || echo "")
+
+          [ -n "$STORE_ID" ] && runtipi DELETE /api/marketplace/$STORE_ID -f || true
+
+      - name: Mark deployments inactive
+        if: steps.apps.outputs.list != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const apps = '${{ steps.apps.outputs.list }}'.trim().split(/\s+/).filter(Boolean);
+
+            for (const appId of apps) {
+              const { data: deployments } = await github.rest.repos.listDeployments({
+                ...context.repo,
+                environment: `preview/${appId}`,
+              });
+              for (const dep of deployments) {
+                await github.rest.repos.createDeploymentStatus({
+                  ...context.repo,
+                  deployment_id: dep.id,
+                  state: 'inactive',
+                });
+              }
+            }

@@ -1,0 +1,174 @@
+name: Deploy Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'apps/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      deployments: write
+    env:
+      RUNTIPI_URL: ${{ secrets.RUNTIPI_URL }}
+      CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
+      CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed apps
+        id: apps
+        run: |
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- apps/ \
+            | grep -oP '^apps/\K[^/]+' | sort -u | tr '\n' ' ')
+          echo "list=${CHANGED}" >> "$GITHUB_OUTPUT"
+
+      - name: Setup and authenticate
+        if: steps.apps.outputs.list != ''
+        env:
+          RUNTIPI_ADMIN: ${{ secrets.RUNTIPI_ADMIN }}
+          RUNTIPI_PASSWORD: ${{ secrets.RUNTIPI_PASSWORD }}
+          RUNTIPI_TOTP_SECRET: ${{ secrets.RUNTIPI_TOTP_SECRET }}
+        run: |
+          sudo apt-get install -y oathtool
+
+          cat > /tmp/runtipi.sh << 'EOF'
+          runtipi() {
+            local method="$1" path="$2"
+            shift 2
+            curl -s -b /tmp/jar -c /tmp/jar \
+              -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+              -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+              -H "Content-Type: application/json" \
+              -X "$method" \
+              "$@" \
+              "$RUNTIPI_URL$path"
+          }
+          EOF
+
+          source /tmp/runtipi.sh
+
+          LOGIN=$(python3 -c "
+          import json, os
+          print(json.dumps({'username': os.environ['RUNTIPI_ADMIN'], 'password': os.environ['RUNTIPI_PASSWORD']}))
+          ")
+          RESPONSE=$(runtipi POST /api/auth/login -d "$LOGIN" -f)
+          TOTP_SESSION=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['totpSessionId'])")
+          TOTP_CODE=$(oathtool --totp --base32 "$RUNTIPI_TOTP_SECRET")
+          VERIFY=$(python3 -c "
+          import json, sys
+          print(json.dumps({'totpCode': sys.argv[1], 'totpSessionId': sys.argv[2]}))
+          " "$TOTP_CODE" "$TOTP_SESSION")
+          runtipi POST /api/auth/verify-totp -d "$VERIFY" -f
+
+      - name: Create and sync preview store
+        if: steps.apps.outputs.list != ''
+        run: |
+          source /tmp/runtipi.sh
+          STORE="pr-${{ github.event.number }}"
+          BRANCH_URL="https://github.com/${{ github.repository }}/tree/${{ github.head_ref }}"
+          CREATE_BODY=$(python3 -c "
+          import json, sys
+          print(json.dumps({'name': sys.argv[1], 'url': sys.argv[2]}))
+          " "$STORE" "$BRANCH_URL")
+
+          runtipi POST /api/marketplace/create -d "$CREATE_BODY" || true
+          runtipi POST /api/marketplace/pull -f
+
+      - name: Install apps
+        if: steps.apps.outputs.list != ''
+        id: install
+        run: |
+          source /tmp/runtipi.sh
+          STORE="pr-${{ github.event.number }}"
+
+          cat > /tmp/gen_form.py << 'PYEOF'
+          import json, secrets, sys
+          config = json.load(open(sys.argv[1]))
+          out = {
+              "exposed": True,
+              "domain": f"{config['id']}.apps.cmolina.cl",
+          }
+          for f in config.get("form_fields", []):
+              env = f["env_variable"]
+              t = f["type"]
+              if t == "random":
+                  n = f.get("min", 32)
+                  if f.get("encoding") == "hex":
+                      out[env] = secrets.token_hex((n + 1) // 2)[:n]
+                  else:
+                      out[env] = secrets.token_urlsafe(n)[:n]
+              elif t == "boolean":
+                  out[env] = str(f.get("default", False)).lower()
+              elif f.get("default") is not None:
+                  out[env] = str(f["default"])
+              elif t in ("text", "password") and f.get("required"):
+                  out[env] = "preview-value"
+          print(json.dumps({"form": out}))
+          PYEOF
+
+          SUCCESS_APPS=""
+          FAILED_APPS=""
+
+          for APP_ID in ${{ steps.apps.outputs.list }}; do
+            CONFIG="apps/$APP_ID/config.json"
+            [ -f "$CONFIG" ] || continue
+
+            URN="${APP_ID}:${STORE}"
+
+            # Uninstall first to handle re-runs cleanly
+            runtipi POST /api/app-lifecycle/$URN/uninstall -d '{}' -o /dev/null || true
+
+            FORM=$(python3 /tmp/gen_form.py "$CONFIG")
+            STATUS=$(runtipi POST /api/app-lifecycle/$URN/install -d "$FORM" -o /dev/null -w "%{http_code}")
+
+            if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
+              SUCCESS_APPS="$SUCCESS_APPS $APP_ID"
+            else
+              FAILED_APPS="$FAILED_APPS $APP_ID"
+            fi
+          done
+
+          echo "success_apps=${SUCCESS_APPS# }" >> "$GITHUB_OUTPUT"
+          echo "failed_apps=${FAILED_APPS# }" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub deployments
+        if: steps.apps.outputs.list != ''
+        uses: actions/github-script@v7
+        env:
+          SUCCESS_APPS: ${{ steps.install.outputs.success_apps }}
+          FAILED_APPS: ${{ steps.install.outputs.failed_apps }}
+        with:
+          script: |
+            const ref = context.payload.pull_request.head.ref;
+            const successApps = (process.env.SUCCESS_APPS || '').trim().split(/\s+/).filter(Boolean);
+            const failedApps  = (process.env.FAILED_APPS  || '').trim().split(/\s+/).filter(Boolean);
+
+            const deploy = async (appId, state) => {
+              const { data: dep } = await github.rest.repos.createDeployment({
+                ...context.repo,
+                ref,
+                environment: `preview/${appId}`,
+                auto_merge: false,
+                required_contexts: [],
+                transient_environment: true,
+                production_environment: false,
+              });
+              await github.rest.repos.createDeploymentStatus({
+                ...context.repo,
+                deployment_id: dep.id,
+                state,
+                ...(state === 'success' && {
+                  environment_url: `https://${appId}.apps.cmolina.cl`,
+                }),
+                log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              });
+            };
+
+            for (const appId of successApps) await deploy(appId, 'success');
+            for (const appId of failedApps)  await deploy(appId, 'failure');
