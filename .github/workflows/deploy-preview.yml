@@ -156,7 +156,7 @@ jobs:
 
             URN="${APP_ID}:${STORE}"
 
-            runtipi DELETE /api/app-lifecycle/$URN/uninstall -d '{"removeBackups":false}' > /dev/null || true
+            runtipi DELETE /api/app-lifecycle/$URN/uninstall -d '{"removeBackups":true}' > /dev/null || true
 
             FORM=$(python3 /tmp/gen_form.py "$CONFIG")
             runtipi POST /api/app-lifecycle/$URN/install -d "$FORM" > /dev/null

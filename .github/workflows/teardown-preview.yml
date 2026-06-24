@@ -111,7 +111,7 @@ jobs:
           STORE="pr-${{ github.event.number }}"
 
           for APP_ID in ${{ steps.apps.outputs.list }}; do
-            runtipi DELETE /api/app-lifecycle/${APP_ID}:${STORE}/uninstall -d '{"removeBackups":false}' > /dev/null || true
+            runtipi DELETE /api/app-lifecycle/${APP_ID}:${STORE}/uninstall -d '{"removeBackups":true}' > /dev/null || true
           done
 
           runtipi GET /api/marketplace/all > /tmp/runtipi_stores
