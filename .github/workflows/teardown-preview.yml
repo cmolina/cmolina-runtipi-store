@@ -73,6 +73,7 @@ jobs:
               -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
               -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
               -H "Content-Type: application/json" \
+              -H "Origin: $RUNTIPI_URL" \
               -X "$method" \
               "$@" \
               -o "$tmp" -w "%{http_code}" \
@@ -110,7 +111,7 @@ jobs:
           STORE="pr-${{ github.event.number }}"
 
           for APP_ID in ${{ steps.apps.outputs.list }}; do
-            runtipi POST /api/app-lifecycle/${APP_ID}:${STORE}/uninstall -d '{}' > /dev/null || true
+            runtipi DELETE /api/app-lifecycle/${APP_ID}:${STORE}/uninstall -d '{"removeBackups":false}' > /dev/null || true
           done
 
           runtipi GET /api/marketplace/all > /tmp/runtipi_stores
@@ -118,9 +119,10 @@ jobs:
           import json, sys
           stores = json.load(open('/tmp/runtipi_stores'))
           target = sys.argv[1]
-          for s in (stores if isinstance(stores, list) else stores.get('data', [])):
+          items = stores if isinstance(stores, list) else stores.get('data', stores.get('appStores', []))
+          for s in items:
               if s.get('slug') == target or s.get('name') == target:
-                  print(s['id'])
+                  print(s.get('id') or s.get('slug'))
                   break
           " "$STORE" 2>/dev/null || echo "")
 

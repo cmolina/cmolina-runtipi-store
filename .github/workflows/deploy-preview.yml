@@ -70,6 +70,7 @@ jobs:
               -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
               -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
               -H "Content-Type: application/json" \
+              -H "Origin: $RUNTIPI_URL" \
               -X "$method" \
               "$@" \
               -o "$tmp" -w "%{http_code}" \
@@ -155,7 +156,7 @@ jobs:
 
             URN="${APP_ID}:${STORE}"
 
-            runtipi POST /api/app-lifecycle/$URN/uninstall -d '{}' > /dev/null || true
+            runtipi DELETE /api/app-lifecycle/$URN/uninstall -d '{"removeBackups":false}' > /dev/null || true
 
             FORM=$(python3 /tmp/gen_form.py "$CONFIG")
             runtipi POST /api/app-lifecycle/$URN/install -d "$FORM" > /dev/null
