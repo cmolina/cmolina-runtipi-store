@@ -1,14 +1,20 @@
 {
   "permissions": {
     "allow": [
-      "Bash(gh release *)",
-      "Bash(gh api *)",
+      "Bash(bun install*)",
       "Bash(bun run test)",
-      "Bash(open *)",
-      "WebSearch",
+      "Bash(bunx sharp-cli*)",
+      "Bash(curl -sL *)",
+      "Bash(file *)",
+      "Bash(git*)",
+      "Bash(mkdir -p *)",
+      "Bash(rm -rf *)",
+      "mcp__github__search_code",
+      "mcp__github__create_pull_request",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:hub.docker.com)"
+      "WebFetch(domain:hub.docker.com)",
+      "WebFetch(domain:runtipi.io)"
     ]
   }
 }

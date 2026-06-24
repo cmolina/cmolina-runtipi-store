@@ -40,6 +40,17 @@ Search extensively for **$ARGUMENTS** to gather:
 8. **Supported architectures** — typically `["arm64", "amd64"]`, verify from Docker Hub
 9. **Logo** — find a URL to the app's logo/icon (PNG or JPG)
 
+### Searching GitHub source code
+
+When you need to look up runtipi internals (e.g. available built-in env vars, schema fields), use the `mcp__github__search_code` MCP tool — load it with ToolSearch first:
+
+```
+ToolSearch("select:mcp__github__search_code")
+mcp__github__search_code({ query: "APP_PROTOCOL repo:runtipi/runtipi" })
+```
+
+> **Note:** `mcp__github__get_file_contents` is restricted to this store's repo only. For runtipi source files use `mcp__github__search_code` to get the relevant fragments directly from search result snippets.
+
 ---
 
 ## Step 2: Create a git worktree from latest origin/main
@@ -153,6 +164,22 @@ Runtipi provides built-in environment variables you MUST use for volumes:
 |----------|-------------|
 | `${APP_DATA_DIR}` | Path to the app's data folder (e.g., `/root/.local/share/runtipi/statedirs/appstore/apps/<app-id>`) |
 | `${ROOT_FOLDER_HOST}` | The root folder of the Runtipi installation |
+| `${APP_PROTOCOL}` | `http` when not exposed, `https` when exposed via reverse proxy |
+| `${APP_DOMAIN}` | `<internalIp>:<port>` when not exposed; `<subdomain>.<localDomain>` or custom domain when exposed |
+| `${APP_HOST}` | Same as APP_DOMAIN |
+| `${APP_PORT}` | The host port mapped to the app |
+| `${APP_LOCAL_DOMAIN}` | The local subdomain (e.g. `airtrail.local.domain`) |
+| `${APP_EXPOSED_DOMAIN}` | The custom external domain when the app is exposed with one |
+| `${APP_EXPOSED}` | `"true"` when the app is exposed, unset otherwise |
+
+#### For apps that need their public URL (e.g. ORIGIN, BASE_URL, PUBLIC_URL):
+
+**Always use `${APP_PROTOCOL}://${APP_DOMAIN}`** — this auto-adapts to all cases:
+- Not exposed: `http://192.168.1.x:3000`
+- Exposed (local subdomain): `https://airtrail.local.domain`
+- Exposed (custom domain): `https://airtrail.example.com`
+
+Never hard-code `http://` or make this a form_field — runtipi sets these vars automatically.
 
 #### Global variables (commonly used):
 | Variable | Description |
@@ -210,7 +237,7 @@ Reference `apps/dawarich/metadata/description.md` for style.
 Download the app's official logo/icon and save it as `$REPO_DIR/add-<app-id>/apps/<app-id>/metadata/logo.jpg`.
 
 - Try the GitHub repo's avatar, social preview, or icon from the app's website
-- If the source is PNG, convert to JPG: `sips -s format jpeg logo.png --out logo.jpg` (macOS)
+- If the source is PNG, convert to JPG with `bunx sharp-cli --input logo.png --output logo.jpg` (works on Linux and macOS)
 - Target a square image, reasonable size (128x128 to 512x512)
 - If you absolutely cannot find a logo, generate a simple placeholder
 
@@ -250,21 +277,26 @@ export GIT_WORK_TREE=$REPO_DIR/add-<app-id>
 Then run all subsequent git commands normally.
 
 ```bash
-GH_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
-
 git add apps/<app-id>/
 git commit --no-gpg-sign -m "Add <App Name> app - <short description>"
 git push -u origin add-<app-id>
-
-gh pr create --repo "$GH_REPO" \
-  --head add-<app-id> \
-  --base main \
-  --title "Add <App Name>" \
-  --body "<description of the app and what it does>"
-
-# Open PR in browser for review
-open <PR_URL>
 ```
+
+Then create the PR using the GitHub MCP tool (load it first via ToolSearch):
+
+```
+ToolSearch("select:mcp__github__create_pull_request")
+mcp__github__create_pull_request({
+  owner: "<repo-owner>",
+  repo: "<repo-name>",
+  title: "Add <App Name>",
+  head: "add-<app-id>",
+  base: "main",
+  body: "..."
+})
+```
+
+> **Do not use `gh pr create`** — the `gh` CLI is not available in remote sessions. Always use the MCP tool.
 
 ---
 
