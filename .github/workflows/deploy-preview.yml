@@ -41,15 +41,19 @@ jobs:
           runtipi() {
             local method="$1" path="$2"
             shift 2
-            local body
-            body=$(curl -s -b /tmp/jar -c /tmp/jar \
+            local tmp body
+            tmp=$(mktemp)
+            RUNTIPI_HTTP_CODE=$(curl -sS -L \
+              -b /tmp/jar -c /tmp/jar \
               -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
               -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
               -H "Content-Type: application/json" \
               -X "$method" \
               "$@" \
+              -o "$tmp" -w "%{http_code}" \
               "$RUNTIPI_URL$path")
-            echo "[$method $path] $body" >&2
+            body=$(cat "$tmp"); rm -f "$tmp"
+            echo "[$method $path] HTTP $RUNTIPI_HTTP_CODE $body" >&2
             echo "$body"
           }
           EOF
@@ -60,14 +64,19 @@ jobs:
           import json, os
           print(json.dumps({'username': os.environ['RUNTIPI_ADMIN'], 'password': os.environ['RUNTIPI_PASSWORD']}))
           ")
-          RESPONSE=$(runtipi POST /api/auth/login -d "$LOGIN")
+          runtipi POST /api/auth/login -d "$LOGIN" > /tmp/runtipi_login
+          if ! python3 -c "import sys,json; json.loads(sys.stdin.read())" < /tmp/runtipi_login 2>/dev/null; then
+            echo "::error::Login response is not JSON — Cloudflare Bot Fight Mode may be blocking this request"
+            exit 1
+          fi
+          RESPONSE=$(cat /tmp/runtipi_login)
           TOTP_SESSION=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['totpSessionId'])")
           TOTP_CODE=$(oathtool --totp --base32 "$RUNTIPI_TOTP_SECRET")
           VERIFY=$(python3 -c "
           import json, sys
           print(json.dumps({'totpCode': sys.argv[1], 'totpSessionId': sys.argv[2]}))
           " "$TOTP_CODE" "$TOTP_SESSION")
-          runtipi POST /api/auth/verify-totp -d "$VERIFY"
+          runtipi POST /api/auth/verify-totp -d "$VERIFY" > /dev/null
 
       - name: Create and sync preview store
         if: steps.apps.outputs.list != ''
@@ -80,8 +89,8 @@ jobs:
           print(json.dumps({'name': sys.argv[1], 'url': sys.argv[2]}))
           " "$STORE" "$BRANCH_URL")
 
-          runtipi POST /api/marketplace/create -d "$CREATE_BODY" || true
-          runtipi POST /api/marketplace/pull -f
+          runtipi POST /api/marketplace/create -d "$CREATE_BODY" > /dev/null || true
+          runtipi POST /api/marketplace/pull > /dev/null
 
       - name: Install apps
         if: steps.apps.outputs.list != ''
@@ -124,11 +133,11 @@ jobs:
 
             URN="${APP_ID}:${STORE}"
 
-            # Uninstall first to handle re-runs cleanly
-            runtipi POST /api/app-lifecycle/$URN/uninstall -d '{}' -o /dev/null || true
+            runtipi POST /api/app-lifecycle/$URN/uninstall -d '{}' > /dev/null || true
 
             FORM=$(python3 /tmp/gen_form.py "$CONFIG")
-            STATUS=$(runtipi POST /api/app-lifecycle/$URN/install -d "$FORM" -o /dev/null -w "%{http_code}")
+            runtipi POST /api/app-lifecycle/$URN/install -d "$FORM" > /dev/null
+            STATUS=$RUNTIPI_HTTP_CODE
 
             if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
               SUCCESS_APPS="$SUCCESS_APPS $APP_ID"

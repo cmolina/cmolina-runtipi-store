@@ -44,15 +44,19 @@ jobs:
           runtipi() {
             local method="$1" path="$2"
             shift 2
-            local body
-            body=$(curl -s -b /tmp/jar -c /tmp/jar \
+            local tmp body
+            tmp=$(mktemp)
+            RUNTIPI_HTTP_CODE=$(curl -sS -L \
+              -b /tmp/jar -c /tmp/jar \
               -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
               -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
               -H "Content-Type: application/json" \
               -X "$method" \
               "$@" \
+              -o "$tmp" -w "%{http_code}" \
               "$RUNTIPI_URL$path")
-            echo "[$method $path] $body" >&2
+            body=$(cat "$tmp"); rm -f "$tmp"
+            echo "[$method $path] HTTP $RUNTIPI_HTTP_CODE $body" >&2
             echo "$body"
           }
           EOF
@@ -63,14 +67,19 @@ jobs:
           import json, os
           print(json.dumps({'username': os.environ['RUNTIPI_ADMIN'], 'password': os.environ['RUNTIPI_PASSWORD']}))
           ")
-          RESPONSE=$(runtipi POST /api/auth/login -d "$LOGIN")
+          runtipi POST /api/auth/login -d "$LOGIN" > /tmp/runtipi_login
+          if ! python3 -c "import sys,json; json.loads(sys.stdin.read())" < /tmp/runtipi_login 2>/dev/null; then
+            echo "::error::Login response is not JSON — Cloudflare Bot Fight Mode may be blocking this request"
+            exit 1
+          fi
+          RESPONSE=$(cat /tmp/runtipi_login)
           TOTP_SESSION=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['totpSessionId'])")
           TOTP_CODE=$(oathtool --totp --base32 "$RUNTIPI_TOTP_SECRET")
           VERIFY=$(python3 -c "
           import json, sys
           print(json.dumps({'totpCode': sys.argv[1], 'totpSessionId': sys.argv[2]}))
           " "$TOTP_CODE" "$TOTP_SESSION")
-          runtipi POST /api/auth/verify-totp -d "$VERIFY"
+          runtipi POST /api/auth/verify-totp -d "$VERIFY" > /dev/null
 
       - name: Uninstall apps and remove store
         if: steps.apps.outputs.list != ''
@@ -79,14 +88,13 @@ jobs:
           STORE="pr-${{ github.event.number }}"
 
           for APP_ID in ${{ steps.apps.outputs.list }}; do
-            runtipi POST /api/app-lifecycle/${APP_ID}:${STORE}/uninstall \
-              -d '{}' -o /dev/null || true
+            runtipi POST /api/app-lifecycle/${APP_ID}:${STORE}/uninstall -d '{}' > /dev/null || true
           done
 
-          ALL_STORES=$(runtipi GET /api/marketplace/all)
-          STORE_ID=$(echo "$ALL_STORES" | python3 -c "
+          runtipi GET /api/marketplace/all > /tmp/runtipi_stores
+          STORE_ID=$(python3 -c "
           import json, sys
-          stores = json.load(sys.stdin)
+          stores = json.load(open('/tmp/runtipi_stores'))
           target = sys.argv[1]
           for s in (stores if isinstance(stores, list) else stores.get('data', [])):
               if s.get('slug') == target or s.get('name') == target:
@@ -94,7 +102,7 @@ jobs:
                   break
           " "$STORE" 2>/dev/null || echo "")
 
-          [ -n "$STORE_ID" ] && runtipi DELETE /api/marketplace/$STORE_ID -f || true
+          [ -n "$STORE_ID" ] && runtipi DELETE /api/marketplace/$STORE_ID > /dev/null || true
 
       - name: Mark deployments inactive
         if: steps.apps.outputs.list != ''
