@@ -28,6 +28,28 @@ jobs:
             | grep -oP '^apps/\K[^/]+' | sort -u | tr '\n' ' ')
           echo "list=${CHANGED}" >> "$GITHUB_OUTPUT"
 
+      - name: Validate secrets
+        if: steps.apps.outputs.list != ''
+        env:
+          RUNTIPI_URL: ${{ secrets.RUNTIPI_URL }}
+          CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
+          RUNTIPI_ADMIN: ${{ secrets.RUNTIPI_ADMIN }}
+          RUNTIPI_PASSWORD: ${{ secrets.RUNTIPI_PASSWORD }}
+          RUNTIPI_TOTP_SECRET: ${{ secrets.RUNTIPI_TOTP_SECRET }}
+        run: |
+          missing=()
+          [ -z "$RUNTIPI_URL" ]        && missing+=(RUNTIPI_URL)
+          [ -z "$CF_CLIENT_ID" ]       && missing+=(CF_CLIENT_ID)
+          [ -z "$CF_CLIENT_SECRET" ]   && missing+=(CF_CLIENT_SECRET)
+          [ -z "$RUNTIPI_ADMIN" ]      && missing+=(RUNTIPI_ADMIN)
+          [ -z "$RUNTIPI_PASSWORD" ]   && missing+=(RUNTIPI_PASSWORD)
+          [ -z "$RUNTIPI_TOTP_SECRET" ] && missing+=(RUNTIPI_TOTP_SECRET)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing required secrets: ${missing[*]}"
+            exit 1
+          fi
+
       - name: Setup and authenticate
         if: steps.apps.outputs.list != ''
         env:
