@@ -57,14 +57,16 @@ jobs:
           import json, os
           print(json.dumps({'username': os.environ['RUNTIPI_ADMIN'], 'password': os.environ['RUNTIPI_PASSWORD']}))
           ")
-          RESPONSE=$(runtipi POST /api/auth/login -d "$LOGIN" -f)
+          RESPONSE=$(runtipi POST /api/auth/login -d "$LOGIN")
+          echo "Login response: $RESPONSE"
           TOTP_SESSION=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['totpSessionId'])")
           TOTP_CODE=$(oathtool --totp --base32 "$RUNTIPI_TOTP_SECRET")
           VERIFY=$(python3 -c "
           import json, sys
           print(json.dumps({'totpCode': sys.argv[1], 'totpSessionId': sys.argv[2]}))
           " "$TOTP_CODE" "$TOTP_SESSION")
-          runtipi POST /api/auth/verify-totp -d "$VERIFY" -f
+          VERIFY_RESPONSE=$(runtipi POST /api/auth/verify-totp -d "$VERIFY")
+          echo "Verify response: $VERIFY_RESPONSE"
 
       - name: Create and sync preview store
         if: steps.apps.outputs.list != ''
