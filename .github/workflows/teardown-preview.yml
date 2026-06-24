@@ -11,6 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
+    env:
+      RUNTIPI_URL: ${{ secrets.RUNTIPI_URL }}
+      CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
+      CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
 
     steps:
       - uses: actions/checkout@v4
@@ -27,67 +31,55 @@ jobs:
             | grep -oP '^apps/\K[^/]+' | sort -u | tr '\n' ' ')
           echo "list=${CHANGED}" >> "$GITHUB_OUTPUT"
 
-      - name: Install oathtool
-        if: steps.apps.outputs.list != ''
-        run: sudo apt-get install -y oathtool
-
-      - name: Authenticate with runtipi
+      - name: Setup and authenticate
         if: steps.apps.outputs.list != ''
         env:
-          RUNTIPI_URL: ${{ secrets.RUNTIPI_URL }}
           RUNTIPI_ADMIN: ${{ secrets.RUNTIPI_ADMIN }}
           RUNTIPI_PASSWORD: ${{ secrets.RUNTIPI_PASSWORD }}
           RUNTIPI_TOTP_SECRET: ${{ secrets.RUNTIPI_TOTP_SECRET }}
-          CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
-          CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
         run: |
-          LOGIN_BODY=$(python3 -c "
+          sudo apt-get install -y oathtool
+
+          cat > /tmp/runtipi.sh << 'EOF'
+          runtipi() {
+            local method="$1" path="$2"
+            shift 2
+            curl -s -b /tmp/jar -c /tmp/jar \
+              -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+              -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+              -X "$method" \
+              "$@" \
+              "$RUNTIPI_URL$path"
+          }
+          EOF
+
+          source /tmp/runtipi.sh
+
+          LOGIN=$(python3 -c "
           import json, os
           print(json.dumps({'username': os.environ['RUNTIPI_ADMIN'], 'password': os.environ['RUNTIPI_PASSWORD']}))
           ")
-
-          RESPONSE=$(curl -sf -c /tmp/jar \
-            -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
-            -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
-            -H "Content-Type: application/json" \
-            -d "$LOGIN_BODY" \
-            "$RUNTIPI_URL/api/auth/login")
-
+          RESPONSE=$(runtipi POST /api/auth/login -H "Content-Type: application/json" -d "$LOGIN" -f)
           TOTP_SESSION=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['totpSessionId'])")
           TOTP_CODE=$(oathtool --totp --base32 "$RUNTIPI_TOTP_SECRET")
-
-          VERIFY_BODY=$(python3 -c "
+          VERIFY=$(python3 -c "
           import json, sys
           print(json.dumps({'totpCode': sys.argv[1], 'totpSessionId': sys.argv[2]}))
           " "$TOTP_CODE" "$TOTP_SESSION")
-
-          curl -sf -b /tmp/jar -c /tmp/jar \
-            -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
-            -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
-            -H "Content-Type: application/json" \
-            -d "$VERIFY_BODY" \
-            "$RUNTIPI_URL/api/auth/verify-totp"
+          runtipi POST /api/auth/verify-totp -H "Content-Type: application/json" -d "$VERIFY" -f
 
       - name: Uninstall apps and remove store
         if: steps.apps.outputs.list != ''
         id: teardown
-        env:
-          RUNTIPI_URL: ${{ secrets.RUNTIPI_URL }}
-          CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
-          CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
         run: |
+          source /tmp/runtipi.sh
           STORE="pr-${{ github.event.number }}"
           RESULTS=""
 
           for APP_ID in ${{ steps.apps.outputs.list }}; do
             URN="${APP_ID}:${STORE}"
-
-            STATUS=$(curl -s -o /dev/null -w "%{http_code}" -b /tmp/jar \
-              -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
-              -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
-              -H "Content-Type: application/json" \
-              -d '{}' \
-              "$RUNTIPI_URL/api/app-lifecycle/$URN/uninstall")
+            STATUS=$(runtipi POST /api/app-lifecycle/$URN/uninstall \
+              -H "Content-Type: application/json" -d '{}' -o /dev/null -w "%{http_code}")
 
             if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
               RESULTS="${RESULTS}🗑️ \`${APP_ID}\` uninstalled\n"
@@ -97,11 +89,7 @@ jobs:
           done
 
           # Find the store by name/slug and delete it
-          ALL_STORES=$(curl -sf -b /tmp/jar \
-            -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
-            -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
-            "$RUNTIPI_URL/api/marketplace/all")
-
+          ALL_STORES=$(runtipi GET /api/marketplace/all)
           STORE_ID=$(echo "$ALL_STORES" | python3 -c "
           import json, sys
           stores = json.load(sys.stdin)
@@ -113,10 +101,7 @@ jobs:
           " "$STORE" 2>/dev/null || echo "")
 
           if [ -n "$STORE_ID" ]; then
-            curl -sf -b /tmp/jar -X DELETE \
-              -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
-              -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
-              "$RUNTIPI_URL/api/marketplace/$STORE_ID"
+            runtipi DELETE /api/marketplace/$STORE_ID -f
             RESULTS="${RESULTS}🗑️ Store \`${STORE}\` removed\n"
           else
             RESULTS="${RESULTS}⚠️ Store \`${STORE}\` not found — may have been removed already\n"
