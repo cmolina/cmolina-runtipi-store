@@ -143,8 +143,16 @@ Extract `version` and `source` fields. Parse `source` to get the GitHub owner/re
 
 ## Step 1 — Fetch latest GitHub release and all skipped versions
 
+> **`gh` CLI is not available** in this environment. Use `curl` + the GitHub REST API for all upstream queries.
+
 ```bash
-gh release list --repo <owner>/<repo> --limit 20
+curl -sS "https://api.github.com/repos/<owner>/<repo>/releases?per_page=20" \
+  | python3 -c "
+import json, sys
+releases = json.load(sys.stdin)
+for r in releases:
+    print(r['tag_name'], '| prerelease:', r['prerelease'], '| draft:', r['draft'])
+"
 ```
 
 Pick the **latest stable** tag — skip pre-releases (`-rc.`, `-beta.`, `-alpha.`).
@@ -156,7 +164,8 @@ If the latest release tag matches the current `version` field → print "Already
 **Collect release notes for ALL skipped versions** (every stable release between current version and the latest, inclusive of the latest). Fetch each one:
 
 ```bash
-gh release view <tag> --repo <owner>/<repo> --json tagName,body
+curl -sS "https://api.github.com/repos/<owner>/<repo>/releases/tags/<tag>" \
+  | python3 -c "import json,sys; r=json.load(sys.stdin); print(r['body'])"
 ```
 
 Concatenate these into a `$SKIPPED_RELEASE_NOTES` variable ordered from oldest-skipped to newest. This consolidated body is used in Step 3 for env var detection and in the PR body.
@@ -165,24 +174,28 @@ Concatenate these into a `$SKIPPED_RELEASE_NOTES` variable ordered from oldest-s
 
 ## Step 2 — Create a fresh git worktree from latest origin/main
 
-Worktrees go in `/private/tmp/`. The branch is created inline during `worktree add` — do NOT run a separate `git checkout -b` afterward.
-
-The fetch was already done in Step 0 — `origin/main` is current. Just verify, clean, and create:
+> **Session may already be in the target worktree.** When the CI/session harness pre-creates a branch (e.g. `claude/docker-health-check-ofa9vb`) the CWD is already checked out to it. Attempting to add a second worktree for the same branch fails with `fatal: 'branch' is already used by worktree at '...'`. Always check first:
 
 ```bash
-# Verify we have the latest
-git -C $REPO_DIR log origin/main --oneline -1
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+TARGET_BRANCH="${TARGET_BRANCH:-update-<app-name>-<new-version>}"
 
-# Remove any stale worktree at that path
-git -C $REPO_DIR worktree remove --force $REPO_DIR/<app-name>-update 2>/dev/null || true
-rm -rf $REPO_DIR/<app-name>-update
-git -C $REPO_DIR worktree prune
-
-# Create the worktree on a new branch pointing at origin/main (latest)
-git -C $REPO_DIR worktree add $REPO_DIR/<app-name>-update -b update-<app-name>-<new-version> origin/main
+if [ "$CURRENT_BRANCH" = "$TARGET_BRANCH" ]; then
+  # Already in the right worktree — work here, no worktree creation needed
+  WORKTREE_DIR=$(pwd)
+else
+  # Create a fresh worktree on a new branch
+  git -C $REPO_DIR worktree remove --force $REPO_DIR/<app-name>-update 2>/dev/null || true
+  rm -rf $REPO_DIR/<app-name>-update
+  git -C $REPO_DIR worktree prune
+  git -C $REPO_DIR worktree add $REPO_DIR/<app-name>-update -b $TARGET_BRANCH origin/main
+  WORKTREE_DIR=$REPO_DIR/<app-name>-update
+fi
 ```
 
-All subsequent file edits happen inside `$REPO_DIR/<app-name>-update/apps/<app-name>/`.
+When the session has a pre-created designated branch (from the system prompt's "Develop on branch X" instruction), use **that branch name** as `TARGET_BRANCH` and check whether the CWD is already on it.
+
+All subsequent file edits happen inside `$WORKTREE_DIR/apps/<app-name>/`.
 
 ---
 
@@ -209,20 +222,25 @@ Extract every env var name mentioned. These are candidates regardless of whether
 The upstream repo may not have `docker-compose.yml` or `.env.example` at the **repo root**. Always list the root directory first to find where these files live:
 
 ```bash
-gh api repos/<owner>/<repo>/contents/ --jq '.[].name'
+curl -sS "https://api.github.com/repos/<owner>/<repo>/contents/" \
+  | python3 -c "import json,sys; [print(x['name']) for x in json.load(sys.stdin)]"
 ```
 
 If they're not at root, look for a `docker/` subdirectory:
 
 ```bash
-gh api repos/<owner>/<repo>/contents/docker --jq '.[].name'
+curl -sS "https://api.github.com/repos/<owner>/<repo>/contents/docker" \
+  | python3 -c "import json,sys; [print(x['name']) for x in json.load(sys.stdin)]"
 ```
 
 Then fetch whichever paths exist:
 
 ```bash
-gh api repos/<owner>/<repo>/contents/<path>/docker-compose.yml --jq '.content' | base64 -d
-gh api repos/<owner>/<repo>/contents/<path>/.env.example --jq '.content' | base64 -d 2>/dev/null || true
+curl -sS "https://api.github.com/repos/<owner>/<repo>/contents/<path>/docker-compose.yml" \
+  | python3 -c "import json,sys,base64; print(base64.b64decode(json.load(sys.stdin)['content']).decode())"
+
+curl -sS "https://api.github.com/repos/<owner>/<repo>/contents/<path>/.env.example" \
+  | python3 -c "import json,sys,base64; print(base64.b64decode(json.load(sys.stdin)['content']).decode())" 2>/dev/null || true
 ```
 
 Collect all env var keys from the upstream compose file (all services).
@@ -282,7 +300,7 @@ If tests fail: read the error, fix the issue, re-run. Do NOT proceed until all t
 
 ## Step 7 — Ship the PR
 
-Commit and push from **inside the worktree**. Use `--head` and `--base` explicitly with `gh pr create` — omitting them fails from a worktree context.
+Commit and push from **inside the worktree**.
 
 **NOTE**: If git commands fail with "fatal: this operation must be run in a work tree", set explicit environment variables:
 
@@ -296,17 +314,23 @@ Then run all subsequent git commands normally.
 ```bash
 git add apps/<app-name>/config.json apps/<app-name>/docker-compose.json
 git commit --no-gpg-sign -m "Update <AppName> to <new-version>"
-git push -u origin update-<app-name>-<new-version>
-
-gh pr create \
-  --head update-<app-name>-<new-version> \
-  --base main \
-  --title "Update <AppName> to <new-version>" \
-  --body "..."
-
-# Open PR in browser for review
-open <PR_URL>
+git push -u origin <branch-name>
 ```
+
+> **`gh` CLI is not available** — do NOT use `gh pr create`. Use the `mcp__github__create_pull_request` MCP tool (load its schema via ToolSearch first if needed):
+>
+> ```
+> mcp__github__create_pull_request({
+>   owner: "cmolina",
+>   repo: "cmolina-runtipi-store",
+>   title: "Update <AppName> to <new-version>",
+>   head: "<branch-name>",
+>   base: "main",
+>   body: "..."
+> })
+> ```
+>
+> The tool returns `{ url: "https://github.com/..." }` — report that URL to the user. Do NOT call `open` (no browser in the remote environment).
 
 PR body template:
 ```markdown
@@ -340,7 +364,10 @@ PR body template:
 - **NEVER** change `config.json` fields other than `version`, `tipi_version`, `updated_at`, and `form_fields`
 - **NEVER** use `latest` as an image tag — always pin to the exact version
 - **ALWAYS** fetch `origin/main` in Step 0 before reading any files — local `main` may be stale. Use `origin/main` everywhere, never `main` or `FETCH_HEAD`
-- **NEVER** run `gh pr create` without `--head` and `--base` — it will fail from a worktree
+- **`gh` CLI is NOT available** in this remote environment — use `curl` + GitHub REST API for all upstream queries (releases, file contents, issue comments)
+- **GitHub MCP is restricted to `cmolina/cmolina-runtipi-store`** — it cannot access upstream repos; never use `mcp__github__*` tools to read files from the app's source repo
+- **Use `mcp__github__create_pull_request`** (not `gh pr create`) to open PRs; do NOT call `open` (no browser)
+- **Check if CWD is already the target branch** before creating a worktree — if the session was initialized with a designated branch the CWD is already checked out to it; a second worktree add will fail (see Step 2)
 - **NEVER** run a separate `git checkout -b` after `worktree add` — the branch is created inline
 - If git commands in the worktree fail with "must be run in a work tree", explicitly set `GIT_DIR` and `GIT_WORK_TREE` env vars (see Step 7 troubleshooting)
 - If the app is already at the latest version, stop and say so

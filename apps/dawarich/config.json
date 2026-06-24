@@ -7,8 +7,8 @@
   "port": 3030,
   "categories": ["utilities", "network"],
   "description": "Dawarich is a self-hosted alternative to Google Location History. Track your location history, visualize it on a map, and have complete control over your data.",
-  "tipi_version": 21,
-  "version": "1.8.1",
+  "tipi_version": 22,
+  "version": "1.9.1",
   "source": "https://github.com/Freika/dawarich",
   "website": "https://dawarich.app",
   "exposable": true,
@@ -44,10 +44,12 @@
     { "type": "password", "label": "Metrics Password", "env_variable": "METRICS_PASSWORD", "required": false, "hint": "Password for /metrics endpoint (required to enable Prometheus scraping)" },
     { "type": "text", "label": "SMTP Authentication", "env_variable": "SMTP_AUTHENTICATION", "required": false, "hint": "SMTP authentication type, e.g. plain, login, cram_md5 (useful for Office 365 and similar)" },
     { "type": "text", "label": "SMTP Open Timeout", "env_variable": "SMTP_OPEN_TIMEOUT", "required": false, "hint": "Seconds to wait when opening an SMTP connection (default: 5)" },
-    { "type": "text", "label": "SMTP Read Timeout", "env_variable": "SMTP_READ_TIMEOUT", "required": false, "hint": "Seconds to wait when reading from an SMTP connection (default: 5)" }
+    { "type": "text", "label": "SMTP Read Timeout", "env_variable": "SMTP_READ_TIMEOUT", "required": false, "hint": "Seconds to wait when reading from an SMTP connection (default: 5)" },
+    { "type": "text", "label": "Container UID (PUID)", "env_variable": "PUID", "required": false, "hint": "Run the container as this user ID (e.g. 1000). Do NOT use the Compose user: field — use this instead." },
+    { "type": "text", "label": "Container GID (PGID)", "env_variable": "PGID", "required": false, "hint": "Run the container as this group ID (e.g. 1000). Pair with PUID above." }
   ],
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
   "created_at": 1738700000000,
-  "updated_at": 1781874487053
+  "updated_at": 1782308036221
 }
