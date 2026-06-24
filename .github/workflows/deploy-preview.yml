@@ -141,7 +141,7 @@ jobs:
                   form[env] = str(f["default"])
               elif t in ("text", "password") and f.get("required"):
                   form[env] = "preview-value"
-          print(json.dumps({"exposed": True, "domain": f"{config['id']}.apps.cmolina.cl", "form": form}))
+          print(json.dumps({"exposed": True, "domain": f"{config['id']}-preview.cmolina.cl", "form": form}))
           PYEOF
 
           SUCCESS_APPS=""
@@ -196,7 +196,7 @@ jobs:
                 deployment_id: dep.id,
                 state,
                 ...(state === 'success' && {
-                  environment_url: `https://${appId}.apps.cmolina.cl`,
+                  environment_url: `https://${appId}-preview.cmolina.cl`,
                 }),
                 log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               });
