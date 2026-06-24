@@ -52,7 +52,7 @@
     },
     {
       "name": "dawarich_app",
-      "image": "freikin/dawarich:1.8.1",
+      "image": "freikin/dawarich:1.9.1",
       "isMain": true,
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
@@ -80,6 +80,8 @@
       "restart": "on-failure",
       "environment": [
         { "key": "RAILS_ENV", "value": "production" },
+        { "key": "PUID", "value": "${PUID}" },
+        { "key": "PGID", "value": "${PGID}" },
         { "key": "REDIS_URL", "value": "redis://dawarich_redis:6379" },
         { "key": "DATABASE_HOST", "value": "dawarich_db" },
         { "key": "DATABASE_PORT", "value": "5432" },
@@ -153,7 +155,7 @@
     },
     {
       "name": "dawarich_sidekiq",
-      "image": "freikin/dawarich:1.8.1",
+      "image": "freikin/dawarich:1.9.1",
       "isMain": false,
       "entrypoint": "sidekiq-entrypoint.sh",
       "volumes": [
@@ -176,6 +178,8 @@
       "restart": "on-failure",
       "environment": [
         { "key": "RAILS_ENV", "value": "production" },
+        { "key": "PUID", "value": "${PUID}" },
+        { "key": "PGID", "value": "${PGID}" },
         { "key": "REDIS_URL", "value": "redis://dawarich_redis:6379" },
         { "key": "DATABASE_HOST", "value": "dawarich_db" },
         { "key": "DATABASE_PORT", "value": "5432" },
