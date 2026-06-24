@@ -125,26 +125,23 @@ jobs:
           cat > /tmp/gen_form.py << 'PYEOF'
           import json, secrets, sys
           config = json.load(open(sys.argv[1]))
-          out = {
-              "exposed": True,
-              "domain": f"{config['id']}.apps.cmolina.cl",
-          }
+          form = {}
           for f in config.get("form_fields", []):
               env = f["env_variable"]
               t = f["type"]
               if t == "random":
                   n = f.get("min", 32)
                   if f.get("encoding") == "hex":
-                      out[env] = secrets.token_hex((n + 1) // 2)[:n]
+                      form[env] = secrets.token_hex((n + 1) // 2)[:n]
                   else:
-                      out[env] = secrets.token_urlsafe(n)[:n]
+                      form[env] = secrets.token_urlsafe(n)[:n]
               elif t == "boolean":
-                  out[env] = str(f.get("default", False)).lower()
+                  form[env] = str(f.get("default", False)).lower()
               elif f.get("default") is not None:
-                  out[env] = str(f["default"])
+                  form[env] = str(f["default"])
               elif t in ("text", "password") and f.get("required"):
-                  out[env] = "preview-value"
-          print(json.dumps({"form": out}))
+                  form[env] = "preview-value"
+          print(json.dumps({"exposed": True, "domain": f"{config['id']}-preview.cmolina.cl", "form": form}))
           PYEOF
 
           SUCCESS_APPS=""
@@ -199,7 +196,7 @@ jobs:
                 deployment_id: dep.id,
                 state,
                 ...(state === 'success' && {
-                  environment_url: `https://${appId}.apps.cmolina.cl`,
+                  environment_url: `https://${appId}-preview.cmolina.cl`,
                 }),
                 log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               });
