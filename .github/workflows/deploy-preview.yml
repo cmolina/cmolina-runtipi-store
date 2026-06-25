@@ -79,6 +79,26 @@ jobs:
             echo "[$method $path] HTTP $RUNTIPI_HTTP_CODE $body" >&2
             echo "$body"
           }
+
+          wait_for_app_status() {
+            local urn="$1" target="$2" timeout="${3:-120}"
+            local elapsed=0 status
+            while [ "$elapsed" -lt "$timeout" ]; do
+              status=$(runtipi GET /api/apps/$urn 2>/dev/null | python3 -c "
+import sys, json
+try:
+    print(json.load(sys.stdin).get('status', 'missing'))
+except Exception:
+    print('missing')
+" 2>/dev/null)
+              echo "[wait] $urn status=$status (target=$target, ${elapsed}s elapsed)" >&2
+              [ "$status" = "$target" ] && return 0
+              sleep 5
+              elapsed=$((elapsed + 5))
+            done
+            echo "[wait] $urn timed out after ${elapsed}s, last status=$status" >&2
+            return 1
+          }
           EOF
 
           source /tmp/runtipi.sh
@@ -157,12 +177,11 @@ jobs:
             URN="${APP_ID}:${STORE}"
 
             runtipi DELETE /api/app-lifecycle/$URN/uninstall -d '{"removeBackups":true}' > /dev/null || true
+            wait_for_app_status "$URN" "missing" 60 || true
 
             FORM=$(python3 /tmp/gen_form.py "$CONFIG")
             runtipi POST /api/app-lifecycle/$URN/install -d "$FORM" > /dev/null
-            STATUS=$RUNTIPI_HTTP_CODE
-
-            if [ "$STATUS" -ge 200 ] && [ "$STATUS" -lt 300 ]; then
+            if wait_for_app_status "$URN" "running" 120; then
               SUCCESS_APPS="$SUCCESS_APPS $APP_ID"
             else
               FAILED_APPS="$FAILED_APPS $APP_ID"
