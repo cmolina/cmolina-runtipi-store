@@ -1,0 +1,31 @@
+{
+  "name": "AirTrail",
+  "id": "airtrail",
+  "available": true,
+  "short_desc": "Personal flight tracking system with interactive maps",
+  "author": "johanohly",
+  "port": 3000,
+  "categories": ["utilities"],
+  "description": "AirTrail is a modern, open-source personal flight tracking system that lets you log, visualize, and analyze your entire aviation history. Track flights on an interactive world map, gather statistics on your travel patterns, and import flight data from popular services like MyFlightRadar24, Flighty, TripIt, and more.",
+  "tipi_version": 1,
+  "version": "3.10.0",
+  "source": "https://github.com/johanohly/AirTrail",
+  "website": "https://airtrail.johan.ohly.dk",
+  "exposable": true,
+  "force_expose": false,
+  "supported_architectures": ["amd64", "arm64"],
+  "form_fields": [
+    {
+      "type": "random",
+      "label": "Database Password",
+      "env_variable": "AIRTRAIL_DB_PASSWORD",
+      "required": true,
+      "min": 32,
+      "encoding": "hex"
+    }
+  ],
+  "dynamic_config": true,
+  "min_tipi_version": "v4.0.0",
+  "created_at": 1750636800000,
+  "updated_at": 1750636800000
+}

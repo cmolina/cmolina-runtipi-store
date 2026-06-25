@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 2,
+  "services": [
+    {
+      "name": "airtrail-db",
+      "image": "postgres:16-alpine",
+      "isMain": false,
+      "environment": [
+        { "key": "POSTGRES_DB", "value": "airtrail" },
+        { "key": "POSTGRES_USER", "value": "airtrail" },
+        { "key": "POSTGRES_PASSWORD", "value": "${AIRTRAIL_DB_PASSWORD}" }
+      ],
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data/postgres",
+          "containerPath": "/var/lib/postgresql/data"
+        }
+      ],
+      "restart": "always",
+      "healthCheck": {
+        "test": "pg_isready -U airtrail -d airtrail",
+        "interval": "10s",
+        "retries": 5,
+        "startPeriod": "30s",
+        "timeout": "10s"
+      }
+    },
+    {
+      "name": "airtrail",
+      "image": "johly/airtrail:v3.10.0",
+      "isMain": true,
+      "internalPort": 3000,
+      "environment": [
+        { "key": "ORIGIN", "value": "${APP_PROTOCOL}://${APP_DOMAIN}" },
+        { "key": "DB_URL", "value": "postgres://airtrail:${AIRTRAIL_DB_PASSWORD}@airtrail-db:5432/airtrail" },
+        { "key": "DB_PASSWORD", "value": "${AIRTRAIL_DB_PASSWORD}" },
+        { "key": "DB_DATABASE_NAME", "value": "airtrail" },
+        { "key": "DB_USERNAME", "value": "airtrail" },
+        { "key": "UPLOAD_LOCATION", "value": "/app/uploads" }
+      ],
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data/uploads",
+          "containerPath": "/app/uploads"
+        }
+      ],
+      "restart": "unless-stopped",
+      "dependsOn": {
+        "airtrail-db": { "condition": "service_healthy" }
+      }
+    }
+  ]
+}
