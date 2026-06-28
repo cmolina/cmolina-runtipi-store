@@ -23,18 +23,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Free disk space
-        uses: jlumbroso/free-disk-space@v1.3.0
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          docker-images: true
-          swap-storage: true
-
-      - name: Report disk space before install
-        run: df -h /
+        uses: cmolina/cmolina-runtipi-store/.github/actions/free-disk-space@main
 
       - name: Install node
         uses: actions/setup-node@v4
@@ -54,9 +43,6 @@ jobs:
 
       - name: Install Renovate
         run: bun install -g renovate@40
-
-      - name: Report disk space after install
-        run: df -h /
 
       - name: Run renovate
         run: LOG_LEVEL=${{ github.event.inputs.log_level || 'INFO' }} renovate --token ${{ secrets.GITHUB_TOKEN }} ${{ github.repository }}

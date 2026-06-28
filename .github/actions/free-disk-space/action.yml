@@ -1,0 +1,26 @@
+name: Free disk space
+description: >
+  Removes unused pre-installed toolchains from the ubuntu-latest runner,
+  typically recovering 15-20 GB before heavy install steps.
+
+runs:
+  using: composite
+  steps:
+    - name: Report available disk space
+      shell: bash
+      run: df -h /
+
+    - name: Free disk space
+      uses: jlumbroso/free-disk-space@v1.3.0
+      with:
+        tool-cache: false
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: true
+        docker-images: true
+        swap-storage: true
+
+    - name: Report available disk space after cleanup
+      shell: bash
+      run: df -h /
