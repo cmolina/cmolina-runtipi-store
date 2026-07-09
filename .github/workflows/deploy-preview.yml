@@ -31,9 +31,6 @@ jobs:
       - name: Validate secrets
         if: steps.apps.outputs.list != ''
         env:
-          RUNTIPI_URL: ${{ secrets.RUNTIPI_URL }}
-          CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
-          CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
           RUNTIPI_ADMIN: ${{ secrets.RUNTIPI_ADMIN }}
           RUNTIPI_PASSWORD: ${{ secrets.RUNTIPI_PASSWORD }}
           RUNTIPI_TOTP_SECRET: ${{ secrets.RUNTIPI_TOTP_SECRET }}
@@ -52,74 +49,14 @@ jobs:
 
       - name: Setup and authenticate
         if: steps.apps.outputs.list != ''
-        env:
-          RUNTIPI_ADMIN: ${{ secrets.RUNTIPI_ADMIN }}
-          RUNTIPI_PASSWORD: ${{ secrets.RUNTIPI_PASSWORD }}
-          RUNTIPI_TOTP_SECRET: ${{ secrets.RUNTIPI_TOTP_SECRET }}
-        run: |
-          sudo apt-get install -y oathtool
-
-          cat > /tmp/runtipi.sh << 'EOF'
-          runtipi() {
-            local method="$1" path="$2"
-            shift 2
-            local tmp body
-            tmp=$(mktemp)
-            RUNTIPI_HTTP_CODE=$(curl -sS -L \
-              -b /tmp/jar -c /tmp/jar \
-              -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
-              -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
-              -H "Content-Type: application/json" \
-              -H "Origin: $RUNTIPI_URL" \
-              -X "$method" \
-              "$@" \
-              -o "$tmp" -w "%{http_code}" \
-              "$RUNTIPI_URL$path")
-            body=$(cat "$tmp"); rm -f "$tmp"
-            echo "[$method $path] HTTP $RUNTIPI_HTTP_CODE $body" >&2
-            echo "$body"
-          }
-
-          wait_for_app_status() {
-            local urn="$1" target="$2" timeout="${3:-120}"
-            local elapsed=0 status
-            while [ "$elapsed" -lt "$timeout" ]; do
-              status=$(runtipi GET /api/apps/$urn 2>/dev/null | python3 -c "
-import sys, json
-try:
-    print(json.load(sys.stdin).get('status', 'missing'))
-except Exception:
-    print('missing')
-" 2>/dev/null)
-              echo "[wait] $urn status=$status (target=$target, ${elapsed}s elapsed)" >&2
-              [ "$status" = "$target" ] && return 0
-              sleep 5
-              elapsed=$((elapsed + 5))
-            done
-            echo "[wait] $urn timed out after ${elapsed}s, last status=$status" >&2
-            return 1
-          }
-          EOF
-
-          source /tmp/runtipi.sh
-
-          LOGIN=$(python3 -c "
-          import json, os
-          print(json.dumps({'username': os.environ['RUNTIPI_ADMIN'], 'password': os.environ['RUNTIPI_PASSWORD']}))
-          ")
-          runtipi POST /api/auth/login -d "$LOGIN" > /tmp/runtipi_login
-          if ! python3 -c "import sys,json; json.loads(sys.stdin.read())" < /tmp/runtipi_login 2>/dev/null; then
-            echo "::error::Login response is not JSON — Cloudflare Bot Fight Mode may be blocking this request"
-            exit 1
-          fi
-          RESPONSE=$(cat /tmp/runtipi_login)
-          TOTP_SESSION=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['totpSessionId'])")
-          TOTP_CODE=$(oathtool --totp --base32 "$RUNTIPI_TOTP_SECRET")
-          VERIFY=$(python3 -c "
-          import json, sys
-          print(json.dumps({'totpCode': sys.argv[1], 'totpSessionId': sys.argv[2]}))
-          " "$TOTP_CODE" "$TOTP_SESSION")
-          runtipi POST /api/auth/verify-totp -d "$VERIFY" > /dev/null
+        uses: ./.github/actions/runtipi-auth
+        with:
+          runtipi_url: ${{ secrets.RUNTIPI_URL }}
+          cf_client_id: ${{ secrets.CF_CLIENT_ID }}
+          cf_client_secret: ${{ secrets.CF_CLIENT_SECRET }}
+          runtipi_admin: ${{ secrets.RUNTIPI_ADMIN }}
+          runtipi_password: ${{ secrets.RUNTIPI_PASSWORD }}
+          runtipi_totp_secret: ${{ secrets.RUNTIPI_TOTP_SECRET }}
 
       - name: Create and sync preview store
         if: steps.apps.outputs.list != ''
@@ -127,11 +64,7 @@ except Exception:
           source /tmp/runtipi.sh
           STORE="pr-${{ github.event.number }}"
           BRANCH_URL="https://github.com/${{ github.repository }}/tree/${{ github.head_ref }}"
-          CREATE_BODY=$(python3 -c "
-          import json, sys
-          print(json.dumps({'name': sys.argv[1], 'url': sys.argv[2]}))
-          " "$STORE" "$BRANCH_URL")
-
+          CREATE_BODY=$(jq -n --arg name "$STORE" --arg url "$BRANCH_URL" '{name: $name, url: $url}')
           runtipi POST /api/marketplace/create -d "$CREATE_BODY" > /dev/null || true
           runtipi POST /api/marketplace/pull > /dev/null
 
@@ -141,50 +74,25 @@ except Exception:
         run: |
           source /tmp/runtipi.sh
           STORE="pr-${{ github.event.number }}"
-
-          cat > /tmp/gen_form.py << 'PYEOF'
-          import json, secrets, sys
-          config = json.load(open(sys.argv[1]))
-          form = {}
-          for f in config.get("form_fields", []):
-              env = f["env_variable"]
-              t = f["type"]
-              if t == "random":
-                  n = f.get("min", 32)
-                  if f.get("encoding") == "hex":
-                      form[env] = secrets.token_hex((n + 1) // 2)[:n]
-                  else:
-                      form[env] = secrets.token_urlsafe(n)[:n]
-              elif t == "boolean":
-                  form[env] = str(f.get("default", False)).lower()
-              elif f.get("default") is not None:
-                  form[env] = str(f["default"])
-              elif t in ("text", "password") and f.get("required"):
-                  form[env] = "preview-value"
-          print(json.dumps({"exposed": True, "domain": f"{config['id']}-preview.cmolina.cl", "form": form}))
-          PYEOF
-
           SUCCESS_APPS=""
           FAILED_APPS=""
-
           for APP_ID in ${{ steps.apps.outputs.list }}; do
             CONFIG="apps/$APP_ID/config.json"
             [ -f "$CONFIG" ] || continue
-
             URN="${APP_ID}:${STORE}"
-
             runtipi DELETE /api/app-lifecycle/$URN/uninstall -d '{"removeBackups":true}' > /dev/null || true
-            wait_for_app_status "$URN" "missing" 60 || true
-
-            FORM=$(python3 /tmp/gen_form.py "$CONFIG")
-            runtipi POST /api/app-lifecycle/$URN/install -d "$FORM" > /dev/null
-            if wait_for_app_status "$URN" "running" 120; then
+            sleep 10
+            FORM=$(STORE="$STORE" python3 /tmp/gen_form.py "$CONFIG")
+            runtipi POST /api/app-lifecycle/$URN/install -d "$FORM" > /tmp/install_resp
+            INSTALL_RESP=$(cat /tmp/install_resp)
+            INSTALL_CODE=$RUNTIPI_HTTP_CODE
+            if [ "$INSTALL_CODE" = "200" ] || [ "$INSTALL_CODE" = "201" ]; then
               SUCCESS_APPS="$SUCCESS_APPS $APP_ID"
             else
+              echo "::error::$APP_ID install failed (HTTP $INSTALL_CODE): $INSTALL_RESP"
               FAILED_APPS="$FAILED_APPS $APP_ID"
             fi
           done
-
           echo "success_apps=${SUCCESS_APPS# }" >> "$GITHUB_OUTPUT"
           echo "failed_apps=${FAILED_APPS# }" >> "$GITHUB_OUTPUT"
 
@@ -197,9 +105,9 @@ except Exception:
         with:
           script: |
             const ref = context.payload.pull_request.head.ref;
+            const storeSuffix = `pr-${context.payload.pull_request.number}`;
             const successApps = (process.env.SUCCESS_APPS || '').trim().split(/\s+/).filter(Boolean);
             const failedApps  = (process.env.FAILED_APPS  || '').trim().split(/\s+/).filter(Boolean);
-
             const deploy = async (appId, state) => {
               const { data: dep } = await github.rest.repos.createDeployment({
                 ...context.repo,
@@ -215,11 +123,10 @@ except Exception:
                 deployment_id: dep.id,
                 state,
                 ...(state === 'success' && {
-                  environment_url: `https://${appId}-preview.cmolina.cl`,
+                  environment_url: `https://${appId}-${storeSuffix}-preview.cmolina.cl`,
                 }),
                 log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               });
             };
-
             for (const appId of successApps) await deploy(appId, 'success');
             for (const appId of failedApps)  await deploy(appId, 'failure');
