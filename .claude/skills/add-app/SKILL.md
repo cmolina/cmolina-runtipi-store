@@ -12,7 +12,7 @@ metadata:
 
 Given an app name, I:
 
-1. Research the app extensively (GitHub repo, Docker image, ports, env vars, dependencies)
+1. Research the app extensively (GitHub repo, project self-host docs, Docker image, ports, env vars, dependencies, security recommendations)
 2. Create app directory structure at `apps/<app-id>/`
 3. Generate `config.json` with metadata, categories, and form_fields
 4. Generate `docker-compose.json` with service definitions
@@ -28,17 +28,26 @@ Given an app name, I:
 Search extensively for **$ARGUMENTS** to gather:
 
 1. **GitHub repository** — find the official repo, read the README, docker-compose examples, and `.env.example` or environment variable docs
-2. **Docker image** — find the official Docker image name on Docker Hub or GitHub Container Registry. Get the **latest stable version tag** (not `latest`)
-3. **Default port** — what port the app listens on inside the container
-4. **Environment variables** — ALL of them. Classify each as:
+2. **Project documentation** — look for a self-host / Docker deployment guide on the project's website (e.g., `docs.project.dev/advanced/self_host`, `docs.project.dev/deploy/docker`). Search for "self-host windmill", "deploy X with docker" patterns. The project's docker-compose.yml and Caddyfile/traefik config are authoritative sources for:
+   - **Architecture** — how many services does the official setup use? (server vs worker split, dedicated workers for different job types, sidecars like LSP/indexer)
+   - **Security recommendations** — does the project recommend privileged mode, isolation flags (PID namespaces, nsjail), specific capabilities, or security env vars?
+   - **Health checks** — what endpoint does the project use for health checks? (e.g., `/api/health` vs `/health`, `pg_isready` format)
+   - **Ports** — does the server expose additional ports beyond the main web UI? (e.g., SMTP/email ports, metrics ports)
+   - **Optional services** — are there optional but recommended services (LSP for editor intellisense, multi-player, search indexer)? Add them as non-main services.
+   - **Volume paths and mounts** — what directories does the project recommend mounting?
+   - **Logging configuration** — does the upstream compose define custom log drivers/options?
+4. **Docker image** — find the official Docker image name on Docker Hub or GitHub Container Registry. Get the **latest stable version tag** (not `latest`).
+   - **⚠️ CRITICAL**: The Docker image tag and the GitHub release tag can differ. Many projects tag GitHub releases with a `v` prefix (e.g., `v1.2.3`) but publish Docker images without it (e.g., `1.2.3`). **Always verify the actual Docker image tag exists** before using it — try `docker pull` or check the registry API. `config.json` `version` uses the GitHub release tag (with `v` if that's how the project releases). `docker-compose.json` `image` uses whatever tag the Docker registry actually has (without `v` if that's what was published).
+5. **Default port** — what port the app listens on inside the container
+6. **Environment variables** — ALL of them. Classify each as:
    - Required (app won't start without it)
    - Optional (has sensible defaults)
    - Generated (secrets, passwords, keys - use `"type": "random"`)
-5. **Dependencies** — does it need a database (postgres, mysql, mariadb), cache (redis, valkey), or other services?
-6. **Description** — what the app does, key features, what it replaces
-7. **Categories** — pick from: `network`, `media`, `development`, `automation`, `social`, `utilities`, `photography`, `security`, `featured`, `books`, `data`, `music`, `finance`, `gaming`, `ai`
-8. **Supported architectures** — typically `["arm64", "amd64"]`, verify from Docker Hub
-9. **Logo** — find a URL to the app's logo/icon (PNG or JPG)
+7. **Dependencies** — does it need a database (postgres, mysql, mariadb), cache (redis, valkey), or other services?
+8. **Description** — what the app does, key features, what it replaces
+9. **Categories** — pick from: `network`, `media`, `development`, `automation`, `social`, `utilities`, `photography`, `security`, `featured`, `books`, `data`, `music`, `finance`, `gaming`, `ai`
+10. **Supported architectures** — typically `["arm64", "amd64"]`, verify from Docker Hub
+11. **Logo** — find a URL to the app's logo/icon (PNG or JPG)
 
 ### Searching GitHub source code
 
@@ -206,6 +215,38 @@ Never hard-code `http://` or make this a form_field — runtipi sets these vars 
 - Calibre-web: `${ROOT_FOLDER_HOST}/media/data/books` + `${APP_DATA_DIR}/data/config` + `${APP_DATA_DIR}/data/calibre`
 - Actual-budget: `${APP_DATA_DIR}/data`
 
+### Apply project docs recommendations to docker-compose.json
+
+The research from Step 1 (item 2 — project documentation) **must** shape the service architecture:
+
+#### Service splitting
+- If the project's docker-compose has separate services for different modes (e.g., `windmill_server` + `windmill_worker` + `windmill_worker_native`), **follow that split**. Each service gets its own entry in the runtipi services array.
+- Only mark the publicly-exposed web service as `"isMain": true`. Backend workers and sidecars get `"isMain": false`.
+- If the project recommends service replicas for scale, apply that via `deploy.resources` limits and note it — runtipi handles replicas differently.
+
+#### Security and isolation
+- Check the upstream compose for `privileged: true`, security-related env vars (`FAVOR_UNSHARE_PID`, `ENABLE_UNSHARE_PID`, `DISABLE_NSJAIL`), or capability requirements.
+- If the project recommends isolation (PID namespaces, nsjail), add `"privileged": true` to the relevant worker services and include the required env vars.
+- Add boolean `form_fields` for isolation settings the user might want to toggle (e.g., enable/disable nsjail, enable/disable PID isolation).
+
+#### Optional but recommended services
+- If the project includes optional services for better UX (LSP, search indexer, multi-player), add them as `"isMain": false` services.
+- Give them reasonable resource limits.
+
+#### Volume paths and mounts
+- Match the project's container paths exactly (e.g., `/tmp/windmill/cache`, `/tmp/windmill/logs`, `/pyls/.cache`).
+- Map those to `${APP_DATA_DIR}/data/...` host paths.
+
+#### Ports
+- If the upstream compose exposes additional ports beyond the main web port (e.g., port 2525 for email triggers, port 8002 for metrics), add `"exposePort"` on the main service.
+
+#### Health checks
+- Use the exact health check command from the project's official compose file, not a guess.
+- If the project uses a different path in their documentation vs compose file, prefer the value from the compose file.
+
+#### Logging
+- If the upstream compose configures custom logging (max-size, max-file, compress), replicate it in the runtipi service.
+
 ### Additional rules
 
 - Exactly ONE service must have `"isMain": true`
@@ -216,6 +257,30 @@ Never hard-code `http://` or make this a form_field — runtipi sets these vars 
 - Use `"dependsOn"` to order service startup
 - Hard-code reasonable defaults for internal config (database names, usernames) — only expose user-facing config as form_fields
 - Pin image versions — never use `latest` tag
+
+### ⚠️ CRITICAL: Version naming — GitHub release tag vs Docker image tag
+
+These two are **NOT always the same**. You must verify each independently:
+
+| Field | File | Uses | Example |
+|-------|------|------|---------|
+| `version` | `config.json` | **GitHub release tag** (whatever the project publishes on GitHub Releases) | `v1.753.0`, `1.6.0` |
+| `image` tag | `docker-compose.json` | **Actual Docker image tag** (whatever the registry has) | `1.753.0`, `1.6.0` |
+
+**Common mismatch:** Many projects tag GitHub releases as `v1.2.3` but publish Docker images as just `1.2.3`.
+
+**Always verify the Docker image tag before using it:**
+
+```bash
+# For Docker Hub images:
+docker pull author/image:1.2.3
+
+# For GHCR images:
+docker pull ghcr.io/author/image:1.2.3
+docker pull ghcr.io/author/image:v1.2.3  # try both with and without v
+```
+
+Use the tag that actually resolves. If the GitHub release is `v1.2.3` and `docker pull` succeeds with `1.2.3` but fails with `v1.2.3`, use `1.2.3` in the docker-compose.json image field. The `version` field in config.json keeps the GitHub release tag as-is (e.g., `v1.2.3`).
 
 ---
 
@@ -304,12 +369,14 @@ mcp__github__create_pull_request({
 
 - **NEVER** modify files outside `apps/<app-id>/`
 - **NEVER** touch unrelated apps
+- **ALWAYS** consult the project's official self-host / Docker documentation before designing docker-compose.json — the upstream compose file and docs are authoritative over any assumptions about service architecture, security settings, ports, health checks, volumes, and optional services
 - `app-id` must be lowercase kebab-case
 - Always use explicit refspec when fetching (`+refs/heads/main:refs/remotes/origin/main`)
 - Always use `origin/main` as the base for worktrees (never `FETCH_HEAD`)
 - If git commands in the worktree fail with "must be run in a work tree", explicitly set `GIT_DIR` and `GIT_WORK_TREE` env vars (see Step 8 troubleshooting)
 - Always run tests before shipping PR
 - Never use `latest` as an image tag — always pin to exact version
+- **Docker image tag must be verified** — always check the actual Docker registry tag resolves before using it. The GitHub release tag (`v1.2.3`) and Docker image tag (`1.2.3`) can differ.
 - All 4 files required: `config.json`, `docker-compose.json`, `metadata/description.md`, `metadata/logo.jpg`
 - Match categories to the official list: `network`, `media`, `development`, `automation`, `social`, `utilities`, `photography`, `security`, `featured`, `books`, `data`, `music`, `finance`, `gaming`, `ai`
 - Reference existing apps (dawarich, whoami) for style and structure
