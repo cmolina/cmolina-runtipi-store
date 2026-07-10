@@ -34,9 +34,6 @@ jobs:
       - name: Validate secrets
         if: steps.apps.outputs.list != ''
         env:
-          RUNTIPI_URL: ${{ secrets.RUNTIPI_URL }}
-          CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
-          CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
           RUNTIPI_ADMIN: ${{ secrets.RUNTIPI_ADMIN }}
           RUNTIPI_PASSWORD: ${{ secrets.RUNTIPI_PASSWORD }}
           RUNTIPI_TOTP_SECRET: ${{ secrets.RUNTIPI_TOTP_SECRET }}
@@ -55,101 +52,32 @@ jobs:
 
       - name: Setup and authenticate
         if: steps.apps.outputs.list != ''
-        env:
-          RUNTIPI_ADMIN: ${{ secrets.RUNTIPI_ADMIN }}
-          RUNTIPI_PASSWORD: ${{ secrets.RUNTIPI_PASSWORD }}
-          RUNTIPI_TOTP_SECRET: ${{ secrets.RUNTIPI_TOTP_SECRET }}
-        run: |
-          sudo apt-get install -y oathtool
-
-          cat > /tmp/runtipi.sh << 'EOF'
-          runtipi() {
-            local method="$1" path="$2"
-            shift 2
-            local tmp body
-            tmp=$(mktemp)
-            RUNTIPI_HTTP_CODE=$(curl -sS -L \
-              -b /tmp/jar -c /tmp/jar \
-              -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
-              -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
-              -H "Content-Type: application/json" \
-              -H "Origin: $RUNTIPI_URL" \
-              -X "$method" \
-              "$@" \
-              -o "$tmp" -w "%{http_code}" \
-              "$RUNTIPI_URL$path")
-            body=$(cat "$tmp"); rm -f "$tmp"
-            echo "[$method $path] HTTP $RUNTIPI_HTTP_CODE $body" >&2
-            echo "$body"
-          }
-
-          wait_for_app_status() {
-            local urn="$1" target="$2" timeout="${3:-120}"
-            local elapsed=0 status
-            while [ "$elapsed" -lt "$timeout" ]; do
-              status=$(runtipi GET /api/apps/$urn 2>/dev/null | python3 -c "
-import sys, json
-try:
-    print(json.load(sys.stdin).get('status', 'missing'))
-except Exception:
-    print('missing')
-" 2>/dev/null)
-              echo "[wait] $urn status=$status (target=$target, ${elapsed}s elapsed)" >&2
-              [ "$status" = "$target" ] && return 0
-              sleep 5
-              elapsed=$((elapsed + 5))
-            done
-            echo "[wait] $urn timed out after ${elapsed}s, last status=$status" >&2
-            return 1
-          }
-          EOF
-
-          source /tmp/runtipi.sh
-
-          LOGIN=$(python3 -c "
-          import json, os
-          print(json.dumps({'username': os.environ['RUNTIPI_ADMIN'], 'password': os.environ['RUNTIPI_PASSWORD']}))
-          ")
-          runtipi POST /api/auth/login -d "$LOGIN" > /tmp/runtipi_login
-          if ! python3 -c "import sys,json; json.loads(sys.stdin.read())" < /tmp/runtipi_login 2>/dev/null; then
-            echo "::error::Login response is not JSON — Cloudflare Bot Fight Mode may be blocking this request"
-            exit 1
-          fi
-          RESPONSE=$(cat /tmp/runtipi_login)
-          TOTP_SESSION=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['totpSessionId'])")
-          TOTP_CODE=$(oathtool --totp --base32 "$RUNTIPI_TOTP_SECRET")
-          VERIFY=$(python3 -c "
-          import json, sys
-          print(json.dumps({'totpCode': sys.argv[1], 'totpSessionId': sys.argv[2]}))
-          " "$TOTP_CODE" "$TOTP_SESSION")
-          runtipi POST /api/auth/verify-totp -d "$VERIFY" > /dev/null
+        uses: ./.github/actions/runtipi-auth
+        with:
+          runtipi_url: ${{ secrets.RUNTIPI_URL }}
+          cf_client_id: ${{ secrets.CF_CLIENT_ID }}
+          cf_client_secret: ${{ secrets.CF_CLIENT_SECRET }}
+          runtipi_admin: ${{ secrets.RUNTIPI_ADMIN }}
+          runtipi_password: ${{ secrets.RUNTIPI_PASSWORD }}
+          runtipi_totp_secret: ${{ secrets.RUNTIPI_TOTP_SECRET }}
 
       - name: Uninstall apps and remove store
         if: steps.apps.outputs.list != ''
         run: |
           source /tmp/runtipi.sh
           STORE="pr-${{ github.event.number }}"
-
           for APP_ID in ${{ steps.apps.outputs.list }}; do
             runtipi DELETE /api/app-lifecycle/${APP_ID}:${STORE}/uninstall -d '{"removeBackups":true}' > /dev/null || true
           done
-
           for APP_ID in ${{ steps.apps.outputs.list }}; do
             wait_for_app_status "${APP_ID}:${STORE}" "missing" 120 || true
           done
-
           runtipi GET /api/marketplace/all > /tmp/runtipi_stores
-          STORE_ID=$(python3 -c "
-          import json, sys
-          stores = json.load(open('/tmp/runtipi_stores'))
-          target = sys.argv[1]
-          items = stores if isinstance(stores, list) else stores.get('data', stores.get('appStores', []))
-          for s in items:
-              if s.get('slug') == target or s.get('name') == target:
-                  print(s.get('id') or s.get('slug'))
-                  break
-          " "$STORE" 2>/dev/null || echo "")
-
+          STORE_ID=$(jq -r --arg target "$STORE" '
+            (if type == "object" then .data // .appStores // [] else . end) // []
+            | map(select(.slug == $target or .name == $target))
+            | first | .id // .slug // ""
+          ' /tmp/runtipi_stores 2>/dev/null)
           [ -n "$STORE_ID" ] && runtipi DELETE /api/marketplace/$STORE_ID > /dev/null || true
 
       - name: Mark deployments inactive
@@ -158,7 +86,6 @@ except Exception:
         with:
           script: |
             const apps = '${{ steps.apps.outputs.list }}'.trim().split(/\s+/).filter(Boolean);
-
             for (const appId of apps) {
               const { data: deployments } = await github.rest.repos.listDeployments({
                 ...context.repo,

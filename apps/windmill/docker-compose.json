@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 2,
+  "services": [
+    {
+      "name": "windmill_db",
+      "image": "postgres:16",
+      "isMain": false,
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data/postgres",
+          "containerPath": "/var/lib/postgresql/data"
+        }
+      ],
+      "environment": [
+        { "key": "POSTGRES_USER", "value": "postgres" },
+        { "key": "POSTGRES_PASSWORD", "value": "${POSTGRES_PASSWORD}" },
+        { "key": "POSTGRES_DB", "value": "windmill" }
+      ],
+      "restart": "always",
+      "healthCheck": {
+        "test": "pg_isready -U postgres -d windmill",
+        "interval": "10s",
+        "retries": 5,
+        "startPeriod": "30s",
+        "timeout": "10s"
+      }
+    },
+    {
+      "name": "windmill_server",
+      "image": "ghcr.io/windmill-labs/windmill:1.753.0",
+      "isMain": true,
+      "internalPort": 8000,
+      "exposePort": 2525,
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data/logs",
+          "containerPath": "/tmp/windmill/logs"
+        }
+      ],
+      "environment": [
+        { "key": "DATABASE_URL", "value": "postgres://postgres:${POSTGRES_PASSWORD}@windmill_db/windmill?sslmode=disable" },
+        { "key": "SUPERADMIN_SECRET", "value": "${SUPERADMIN_SECRET}" },
+        { "key": "BASE_URL", "value": "https://${APP_DOMAIN}" },
+        { "key": "MODE", "value": "server" },
+        { "key": "METRICS_ADDR", "value": "true" }
+      ],
+      "restart": "always",
+      "dependsOn": {
+        "windmill_db": { "condition": "service_healthy" }
+      },
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      },
+      "healthCheck": {
+        "test": "wget -qO - http://127.0.0.1:8000/api/health || exit 1",
+        "interval": "30s",
+        "retries": 10,
+        "startPeriod": "60s",
+        "timeout": "10s"
+      },
+      "deploy": {
+        "resources": {
+          "limits": {
+            "cpus": "1.0",
+            "memory": "1G"
+          }
+        }
+      }
+    },
+    {
+      "name": "windmill_worker",
+      "image": "ghcr.io/windmill-labs/windmill:1.753.0",
+      "isMain": false,
+      "privileged": true,
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data/cache",
+          "containerPath": "/tmp/windmill/cache"
+        },
+        {
+          "hostPath": "${APP_DATA_DIR}/data/logs",
+          "containerPath": "/tmp/windmill/logs"
+        }
+      ],
+      "environment": [
+        { "key": "DATABASE_URL", "value": "postgres://postgres:${POSTGRES_PASSWORD}@windmill_db/windmill?sslmode=disable" },
+        { "key": "MODE", "value": "worker" },
+        { "key": "WORKER_GROUP", "value": "default" },
+        { "key": "FAVOR_UNSHARE_PID", "value": "true" }
+      ],
+      "restart": "always",
+      "dependsOn": {
+        "windmill_db": { "condition": "service_healthy" }
+      },
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      },
+      "deploy": {
+        "resources": {
+          "limits": {
+            "cpus": "2.0",
+            "memory": "2G"
+          }
+        }
+      }
+    },
+    {
+      "name": "windmill_worker_native",
+      "image": "ghcr.io/windmill-labs/windmill:1.753.0",
+      "isMain": false,
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data/logs",
+          "containerPath": "/tmp/windmill/logs"
+        }
+      ],
+      "environment": [
+        { "key": "DATABASE_URL", "value": "postgres://postgres:${POSTGRES_PASSWORD}@windmill_db/windmill?sslmode=disable" },
+        { "key": "MODE", "value": "worker" },
+        { "key": "WORKER_GROUP", "value": "native" },
+        { "key": "NATIVE_MODE", "value": "true" },
+        { "key": "SLEEP_QUEUE", "value": "200" }
+      ],
+      "restart": "always",
+      "dependsOn": {
+        "windmill_db": { "condition": "service_healthy" }
+      },
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      },
+      "deploy": {
+        "resources": {
+          "limits": {
+            "cpus": "0.5",
+            "memory": "512M"
+          }
+        }
+      }
+    },
+    {
+      "name": "windmill_extra",
+      "image": "ghcr.io/windmill-labs/windmill-extra:latest",
+      "isMain": false,
+      "internalPort": 3001,
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data/lsp-cache",
+          "containerPath": "/pyls/.cache"
+        }
+      ],
+      "environment": [
+        { "key": "ENABLE_LSP", "value": "true" },
+        { "key": "ENABLE_MULTIPLAYER", "value": "false" },
+        { "key": "ENABLE_DEBUGGER", "value": "true" },
+        { "key": "ENABLE_NSJAIL", "value": "false" },
+        { "key": "REQUIRE_SIGNED_DEBUG_REQUESTS", "value": "true" },
+        { "key": "WINDMILL_BASE_URL", "value": "http://windmill_server:8000" }
+      ],
+      "restart": "always",
+      "dependsOn": {
+        "windmill_db": { "condition": "service_healthy" }
+      },
+      "logging": {
+        "driver": "json-file",
+        "options": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      },
+      "deploy": {
+        "resources": {
+          "limits": {
+            "cpus": "0.5",
+            "memory": "512M"
+          }
+        }
+      }
+    }
+  ]
+}

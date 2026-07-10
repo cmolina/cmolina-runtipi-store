@@ -1,0 +1,60 @@
+name: 'Setup runtipi CLI'
+description: 'Install dependencies, set up runtipi API shell functions, and authenticate with TOTP'
+
+inputs:
+  runtipi_url:
+    description: 'Runtipi instance URL'
+    required: true
+  cf_client_id:
+    description: 'Cloudflare Access Client ID'
+    required: true
+  cf_client_secret:
+    description: 'Cloudflare Access Client Secret'
+    required: true
+  runtipi_admin:
+    description: 'Runtipi admin username'
+    required: true
+  runtipi_password:
+    description: 'Runtipi admin password'
+    required: true
+  runtipi_totp_secret:
+    description: 'Runtipi admin TOTP secret (base32)'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install system dependencies
+      run: sudo apt-get install -y oathtool jq
+      shell: bash
+
+    - name: Stage scripts in /tmp/
+      run: |
+        cp ${{ github.action_path }}/../../scripts/runtipi.sh /tmp/runtipi.sh
+        cp ${{ github.action_path }}/../../scripts/gen_form.py /tmp/gen_form.py
+      shell: bash
+
+    - name: Authenticate with runtipi
+      shell: bash
+      env:
+        RUNTIPI_URL: ${{ inputs.runtipi_url }}
+        CF_CLIENT_ID: ${{ inputs.cf_client_id }}
+        CF_CLIENT_SECRET: ${{ inputs.cf_client_secret }}
+        RUNTIPI_ADMIN: ${{ inputs.runtipi_admin }}
+        RUNTIPI_PASSWORD: ${{ inputs.runtipi_password }}
+        RUNTIPI_TOTP_SECRET: ${{ inputs.runtipi_totp_secret }}
+      run: |
+        source /tmp/runtipi.sh
+
+        LOGIN=$(jq -n --arg u "$RUNTIPI_ADMIN" --arg p "$RUNTIPI_PASSWORD" '{username: $u, password: $p}')
+        runtipi POST /api/auth/login -d "$LOGIN" > /tmp/runtipi_login
+
+        if ! jq . /tmp/runtipi_login > /dev/null 2>&1; then
+          echo "::error::Login response is not JSON — Cloudflare Bot Fight Mode may be blocking this request"
+          exit 1
+        fi
+
+        TOTP_SESSION=$(jq -r '.totpSessionId' /tmp/runtipi_login)
+        TOTP_CODE=$(oathtool --totp --base32 "$RUNTIPI_TOTP_SECRET")
+        VERIFY=$(jq -n --arg code "$TOTP_CODE" --arg session "$TOTP_SESSION" '{totpCode: $code, totpSessionId: $session}')
+        runtipi POST /api/auth/verify-totp -d "$VERIFY" > /dev/null
