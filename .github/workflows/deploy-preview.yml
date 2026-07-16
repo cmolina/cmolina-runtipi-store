@@ -81,15 +81,12 @@ jobs:
             [ -f "$CONFIG" ] || continue
             URN="${APP_ID}:${STORE}"
             runtipi DELETE /api/app-lifecycle/$URN/uninstall -d '{"removeBackups":true}' > /dev/null || true
-            sleep 10
+            wait_for_app_status "$URN" "missing" 60 || true
             FORM=$(STORE="$STORE" python3 /tmp/gen_form.py "$CONFIG")
-            runtipi POST /api/app-lifecycle/$URN/install -d "$FORM" > /tmp/install_resp
-            INSTALL_RESP=$(cat /tmp/install_resp)
-            INSTALL_CODE=$RUNTIPI_HTTP_CODE
-            if [ "$INSTALL_CODE" = "200" ] || [ "$INSTALL_CODE" = "201" ]; then
+            runtipi POST /api/app-lifecycle/$URN/install -d "$FORM" > /dev/null
+            if wait_for_app_status "$URN" "running" 120; then
               SUCCESS_APPS="$SUCCESS_APPS $APP_ID"
             else
-              echo "::error::$APP_ID install failed (HTTP $INSTALL_CODE): $INSTALL_RESP"
               FAILED_APPS="$FAILED_APPS $APP_ID"
             fi
           done
