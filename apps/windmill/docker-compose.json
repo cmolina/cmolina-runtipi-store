@@ -56,7 +56,7 @@
         }
       },
       "healthCheck": {
-        "test": "wget -qO - http://127.0.0.1:8000/api/health || exit 1",
+        "test": "wget -qO - http://127.0.0.1:8000/api/health/status || exit 1",
         "interval": "30s",
         "retries": 10,
         "startPeriod": "60s",
