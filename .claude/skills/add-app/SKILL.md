@@ -241,8 +241,12 @@ The research from Step 1 (item 2 — project documentation) **must** shape the s
 - If the upstream compose exposes additional ports beyond the main web port (e.g., port 2525 for email triggers, port 8002 for metrics), add `"exposePort"` on the main service.
 
 #### Health checks
-- Use the exact health check command from the project's official compose file, not a guess.
-- If the project uses a different path in their documentation vs compose file, prefer the value from the compose file.
+- Use the health check command from the project's official compose file as a **starting point**, but **you must verify the endpoint actually works** before shipping.
+- **⚠️ Critical: Upstream healthcheck endpoints can be wrong.** The Windmill project's own compose uses `GET /api/health` which returns 404 — the correct endpoint is `/api/health/status`. Always verify by running the container locally and testing the endpoint.
+- **How to verify**: After writing the docker-compose.json, run the app on your local Runtipi instance (or via `docker compose up`). Check `docker inspect <container> --format '{{json .State.Health}}'` and confirm it shows `"Status": "healthy"`. If it's `unhealthy`, fix the `test` command before shipping.
+- **Traefik v3 filters unhealthy containers**: Runtipi uses Traefik v3 as its reverse proxy. Traefik **skips containers marked `unhealthy`** by Docker — no router or service is created for them. This means the app will be unreachable via its domain even though the container is running and serving HTTP. A broken healthcheck = a broken domain route.
+- **Check project docs, not just the compose file**: The project's self-host documentation may document a different (correct) health endpoint than what's in the compose file. Cross-reference both sources. If they disagree, **verify by testing**.
+- **Common patterns**: Many projects expose health at `/health`, `/api/health/status`, `/api/health`, or `/status`. Some use `pg_isready` for database services. Always confirm the endpoint returns HTTP 200.
 
 #### Logging
 - If the upstream compose configures custom logging (max-size, max-file, compress), replicate it in the runtipi service.
