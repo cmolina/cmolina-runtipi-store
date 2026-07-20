@@ -10,7 +10,7 @@
     "automation"
   ],
   "description": "Windmill is an open-source developer platform for building internal tools: APIs, background jobs, workflows, and UIs. Scripts written in Python, TypeScript, Go, Bash, SQL, and more are automatically turned into sharable UIs. Compose them into workflows, trigger via webhooks, schedules, or HTTP routes, and build rich low-code UIs on top \u2014 all self-hosted.",
-  "tipi_version": 2,
+  "tipi_version": 3,
   "version": "v1.753.0",
   "source": "https://github.com/windmill-labs/windmill",
   "website": "https://www.windmill.dev",
@@ -36,26 +36,10 @@
       "min": 64,
       "encoding": "hex",
       "hint": "Optional secret token for superadmin API access"
-    },
-    {
-      "type": "boolean",
-      "label": "Enable NSJAIL sandboxing",
-      "env_variable": "DISABLE_NSJAIL",
-      "required": false,
-      "default": true,
-      "hint": "Set to false to enable NSJAIL sandboxing for filesystem and resource isolation. Default enabled (disabled). See https://www.windmill.dev/docs/advanced/security_isolation"
-    },
-    {
-      "type": "boolean",
-      "label": "Enable PID namespace isolation",
-      "env_variable": "ENABLE_UNSHARE_PID",
-      "required": false,
-      "default": true,
-      "hint": "Prevents jobs from accessing parent worker process memory and env vars. Requires privileged mode. See https://www.windmill.dev/docs/advanced/security_isolation"
     }
   ],
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
   "created_at": 1783531674000,
-  "updated_at": 1784351900000
+  "updated_at": 1784399846583
 }
