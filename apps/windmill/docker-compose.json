@@ -90,7 +90,8 @@
         { "key": "DATABASE_URL", "value": "postgres://postgres:${POSTGRES_PASSWORD}@windmill_db/windmill?sslmode=disable" },
         { "key": "MODE", "value": "worker" },
         { "key": "WORKER_GROUP", "value": "default" },
-        { "key": "FAVOR_UNSHARE_PID", "value": "true" }
+        { "key": "DISABLE_NSJAIL", "value": "false" },
+        { "key": "ENABLE_UNSHARE_PID", "value": "true" }
       ],
       "restart": "always",
       "dependsOn": {
