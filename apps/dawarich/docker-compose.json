@@ -52,7 +52,7 @@
     },
     {
       "name": "dawarich_app",
-      "image": "freikin/dawarich:1.9.2",
+      "image": "freikin/dawarich:1.10.1",
       "isMain": true,
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
@@ -124,7 +124,8 @@
         { "key": "METRICS_PASSWORD", "value": "${METRICS_PASSWORD}" },
         { "key": "SMTP_AUTHENTICATION", "value": "${SMTP_AUTHENTICATION}" },
         { "key": "SMTP_OPEN_TIMEOUT", "value": "${SMTP_OPEN_TIMEOUT}" },
-        { "key": "SMTP_READ_TIMEOUT", "value": "${SMTP_READ_TIMEOUT}" }
+        { "key": "SMTP_READ_TIMEOUT", "value": "${SMTP_READ_TIMEOUT}" },
+        { "key": "WEB_CONCURRENCY", "value": "1" }
       ],
       "logging": {
         "driver": "json-file",
@@ -155,7 +156,7 @@
     },
     {
       "name": "dawarich_sidekiq",
-      "image": "freikin/dawarich:1.9.2",
+      "image": "freikin/dawarich:1.10.1",
       "isMain": false,
       "entrypoint": "sidekiq-entrypoint.sh",
       "volumes": [
