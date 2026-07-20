@@ -3,8 +3,6 @@ name: Teardown Preview
 on:
   pull_request:
     types: [closed]
-    paths:
-      - 'apps/**'
 
 jobs:
   teardown:
@@ -19,20 +17,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Detect apps in PR
+      - name: List apps from the PR branch
         id: apps
         run: |
-          CHANGED=$(git diff --name-only \
-            ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} \
-            -- apps/ \
-            | grep -oP '^apps/\K[^/]+' | sort -u | tr '\n' ' ')
-          echo "list=${CHANGED}" >> "$GITHUB_OUTPUT"
+          APPS=$(ls -d apps/*/ 2>/dev/null | sed 's|apps/||;s|/||' | tr '\n' ' ')
+          echo "list=${APPS}" >> "$GITHUB_OUTPUT"
 
       - name: Validate secrets
-        if: steps.apps.outputs.list != ''
         env:
           RUNTIPI_ADMIN: ${{ secrets.RUNTIPI_ADMIN }}
           RUNTIPI_PASSWORD: ${{ secrets.RUNTIPI_PASSWORD }}
@@ -51,7 +44,6 @@ jobs:
           fi
 
       - name: Setup and authenticate
-        if: steps.apps.outputs.list != ''
         uses: ./.github/actions/runtipi-auth
         with:
           runtipi_url: ${{ secrets.RUNTIPI_URL }}
@@ -61,31 +53,45 @@ jobs:
           runtipi_password: ${{ secrets.RUNTIPI_PASSWORD }}
           runtipi_totp_secret: ${{ secrets.RUNTIPI_TOTP_SECRET }}
 
-      - name: Uninstall apps and remove store
-        if: steps.apps.outputs.list != ''
+      - name: Uninstall all apps from the preview store and remove it
         run: |
           source /tmp/runtipi.sh
           STORE="pr-${{ github.event.number }}"
-          for APP_ID in ${{ steps.apps.outputs.list }}; do
-            runtipi DELETE /api/app-lifecycle/${APP_ID}:${STORE}/uninstall -d '{"removeBackups":true}' > /dev/null || true
-          done
-          for APP_ID in ${{ steps.apps.outputs.list }}; do
-            wait_for_app_status "${APP_ID}:${STORE}" "missing" 120 || true
-          done
+          APPS="${{ steps.apps.outputs.list }}"
+
+          if [ -n "$APPS" ]; then
+            echo "Uninstalling apps from $STORE: $APPS"
+            for APP_ID in $APPS; do
+              runtipi DELETE "/api/app-lifecycle/${APP_ID}:${STORE}/uninstall" -d '{"removeBackups":true}' > /dev/null || true
+            done
+            for APP_ID in $APPS; do
+              wait_for_app_status "${APP_ID}:${STORE}" "missing" 120 || true
+            done
+          else
+            echo "No apps to uninstall"
+          fi
+
+          echo "Removing store $STORE"
           runtipi GET /api/marketplace/all > /tmp/runtipi_stores
           STORE_ID=$(jq -r --arg target "$STORE" '
             (if type == "object" then .data // .appStores // [] else . end) // []
             | map(select(.slug == $target or .name == $target))
             | first | .id // .slug // ""
           ' /tmp/runtipi_stores 2>/dev/null)
-          [ -n "$STORE_ID" ] && runtipi DELETE /api/marketplace/$STORE_ID > /dev/null || true
+          if [ -n "$STORE_ID" ]; then
+            runtipi DELETE "/api/marketplace/$STORE_ID" > /dev/null
+            echo "Removed store $STORE (id=$STORE_ID)"
+          else
+            echo "Store $STORE not found, skipping"
+          fi
 
       - name: Mark deployments inactive
-        if: steps.apps.outputs.list != ''
+        env:
+          APPS_LIST: ${{ steps.apps.outputs.list }}
         uses: actions/github-script@v7
         with:
           script: |
-            const apps = '${{ steps.apps.outputs.list }}'.trim().split(/\s+/).filter(Boolean);
+            const apps = (process.env.APPS_LIST || '').trim().split(/\s+/).filter(Boolean);
             for (const appId of apps) {
               const { data: deployments } = await github.rest.repos.listDeployments({
                 ...context.repo,
