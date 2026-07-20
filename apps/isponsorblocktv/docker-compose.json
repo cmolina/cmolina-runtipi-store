@@ -3,7 +3,7 @@
   "services": [
     {
       "name": "isponsorblocktv",
-      "image": "ghcr.io/dmunozv04/isponsorblocktv:v2.9.0",
+      "image": "ghcr.io/dmunozv04/isponsorblocktv:v2.10.0",
       "isMain": true,
       "networkMode": "host",
       "volumes": [
