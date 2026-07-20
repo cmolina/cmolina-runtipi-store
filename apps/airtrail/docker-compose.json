@@ -27,7 +27,7 @@
     },
     {
       "name": "airtrail",
-      "image": "johly/airtrail:v3.10.0",
+      "image": "johly/airtrail:v3.11.1",
       "isMain": true,
       "internalPort": 3000,
       "environment": [
