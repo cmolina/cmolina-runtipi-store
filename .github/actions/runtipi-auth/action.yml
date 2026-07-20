@@ -55,6 +55,23 @@ runs:
         fi
 
         TOTP_SESSION=$(jq -r '.totpSessionId' /tmp/runtipi_login)
-        TOTP_CODE=$(oathtool --totp --base32 "$RUNTIPI_TOTP_SECRET")
-        VERIFY=$(jq -n --arg code "$TOTP_CODE" --arg session "$TOTP_SESSION" '{totpCode: $code, totpSessionId: $session}')
-        runtipi POST /api/auth/verify-totp -d "$VERIFY" > /dev/null
+
+        # Retry TOTP up to 3 times (handles 30-second window boundaries / clock skew)
+        for i in 1 2 3; do
+          TOTP_CODE=$(oathtool --totp --base32 "$RUNTIPI_TOTP_SECRET")
+          VERIFY=$(jq -n --arg code "$TOTP_CODE" --arg session "$TOTP_SESSION" '{totpCode: $code, totpSessionId: $session}')
+          runtipi POST /api/auth/verify-totp -d "$VERIFY" > /tmp/runtipi_verify
+
+          if jq -e '.success == true' /tmp/runtipi_verify > /dev/null 2>&1; then
+            echo "TOTP verification succeeded"
+            break
+          fi
+
+          ERROR_MSG=$(jq -r '.message // "unknown"' /tmp/runtipi_verify)
+          echo "TOTP verification attempt $i/3 failed: $ERROR_MSG"
+          if [ "$i" -eq 3 ]; then
+            echo "::error::TOTP verification failed after 3 attempts: $ERROR_MSG"
+            exit 1
+          fi
+          sleep 1
+        done
