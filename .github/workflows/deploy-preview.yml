@@ -74,13 +74,28 @@ jobs:
           source /tmp/runtipi.sh
           STORE="pr-${{ github.event.number }}"
           for APP_ID in ${{ steps.apps.outputs.list }}; do
+            CONFIG="apps/$APP_ID/config.json"
             COMPOSE="apps/$APP_ID/docker-compose.json"
-            EP=$(jq -r '[.services[] | select(.exposePort != null)] | first | .exposePort // empty' "$COMPOSE" 2>/dev/null)
-            [ -z "$EP" ] && continue
-            RP=$(shuf -i 10000-65534 -n 1)
-            URN="${APP_ID}:${STORE}"
-            BODY=$(jq -n --argjson rp "$RP" '{dockerCompose: "", appEnv: ("APP_PORT=\($rp)")}')
-            runtipi PUT "/api/user-config/$URN" -d "$BODY" > /dev/null
+            # Skip apps that don't expose a port (headless/internal services)
+            PORT=$(jq -r '.port // empty' "$CONFIG" 2>/dev/null)
+            NETWORK_MODE=$(jq -r '[.services[] | .networkMode // empty] | first' "$COMPOSE" 2>/dev/null)
+            HAS_PORT_MAPPING=$(jq -r '[.services[] | select(.internalPort != null or .exposePort != null)] | length > 0' "$COMPOSE" 2>/dev/null)
+            if [ -z "$PORT" ] && [ "$HAS_PORT_MAPPING" = "false" ]; then
+              echo "Skipping $APP_ID: no port mapping needed"
+              continue
+            fi
+            if [ "$NETWORK_MODE" = "host" ]; then
+              echo "Skipping $APP_ID: uses host networking (no port mapping)"
+              continue
+            fi
+            # Only set APP_PORT if config.json has a port field (apps with port get mapped)
+            if [ -n "$PORT" ]; then
+              RP=$(shuf -i 10000-65534 -n 1)
+              URN="${APP_ID}:${STORE}"
+              BODY=$(jq -n --argjson rp "$RP" '{dockerCompose: "", appEnv: ("APP_PORT=\($rp)")}')
+              runtipi PUT "/api/user-config/$URN" -d "$BODY" > /dev/null
+              echo "Set APP_PORT=$RP for $URN (was default $PORT)"
+            fi
           done
 
       - name: Install apps
