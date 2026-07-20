@@ -68,6 +68,21 @@ jobs:
           runtipi POST /api/marketplace/create -d "$CREATE_BODY" > /dev/null || true
           runtipi POST /api/marketplace/pull > /dev/null
 
+      - name: Set random APP_PORT via user-config appEnv (avoid conflicts with production)
+        if: steps.apps.outputs.list != ''
+        run: |
+          source /tmp/runtipi.sh
+          STORE="pr-${{ github.event.number }}"
+          for APP_ID in ${{ steps.apps.outputs.list }}; do
+            COMPOSE="apps/$APP_ID/docker-compose.json"
+            EP=$(jq -r '[.services[] | select(.exposePort != null)] | first | .exposePort // empty' "$COMPOSE" 2>/dev/null)
+            [ -z "$EP" ] && continue
+            RP=$(shuf -i 10000-65534 -n 1)
+            URN="${APP_ID}:${STORE}"
+            BODY=$(jq -n --argjson rp "$RP" '{dockerCompose: "", appEnv: ("APP_PORT=\($rp)")}')
+            runtipi PUT "/api/user-config/$URN" -d "$BODY" > /dev/null
+          done
+
       - name: Install apps
         if: steps.apps.outputs.list != ''
         id: install
@@ -80,10 +95,10 @@ jobs:
             CONFIG="apps/$APP_ID/config.json"
             [ -f "$CONFIG" ] || continue
             URN="${APP_ID}:${STORE}"
-            runtipi DELETE /api/app-lifecycle/$URN/uninstall -d '{"removeBackups":true}' > /dev/null || true
+            runtipi DELETE "/api/app-lifecycle/$URN/uninstall" -d '{"removeBackups":true}' > /dev/null || true
             wait_for_app_status "$URN" "missing" 60 || true
             FORM=$(STORE="$STORE" python3 /tmp/gen_form.py "$CONFIG")
-            runtipi POST /api/app-lifecycle/$URN/install -d "$FORM" > /dev/null
+            runtipi POST "/api/app-lifecycle/$URN/install" -d "$FORM" > /dev/null
             if wait_for_app_status "$URN" "running" 120; then
               SUCCESS_APPS="$SUCCESS_APPS $APP_ID"
             else
