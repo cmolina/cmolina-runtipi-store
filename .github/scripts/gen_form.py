@@ -31,7 +31,10 @@ def main():
         elif f.get("default") is not None:
             form[env] = str(f["default"])
         elif t in ("text", "password") and f.get("required"):
-            form[env] = "preview-value"
+            if "email" in env.lower() or "email" in f.get("label", "").lower():
+                form[env] = "preview@example.com"
+            else:
+                form[env] = "preview-value"
 
     store = os.environ.get("STORE", "")
     suffix = f"-{store}" if store else ""
