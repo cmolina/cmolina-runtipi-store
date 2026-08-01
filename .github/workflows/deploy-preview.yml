@@ -157,3 +157,9 @@ jobs:
             };
             for (const appId of successApps) await deploy(appId, 'success');
             for (const appId of failedApps)  await deploy(appId, 'failure');
+
+      - name: Fail job if any app failed to deploy
+        if: steps.apps.outputs.list != '' && steps.install.outputs.failed_apps != ''
+        run: |
+          echo "::error::Failed to deploy apps: ${{ steps.install.outputs.failed_apps }}"
+          exit 1
