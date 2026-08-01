@@ -7,20 +7,15 @@ iSponsorBlockTV connects to your YouTube TV app and automatically skips sponsore
 - Works with Apple TV, Samsung TV, LG TV, Android TV, Chromecast, Google TV, Roku, Fire TV, Xbox, PlayStation, and more
 - Device discovery via mDNS/SSDP or manual pairing with a YouTube TV code
 - No need to be on the same network after initial setup — only internet access required
-- Configurable via a web-based setup UI on first launch
+- Setup runs from a web terminal — no SSH or CLI access needed
 
 ## Initial Setup
 
-Run the interactive CLI setup after installing the app:
+1. Open the app from your Runtipi dashboard. A web terminal opens in your browser.
+2. Enter the **setup terminal password** you chose during installation (user: `setup`).
+3. Follow the interactive prompts in the terminal to pair your YouTube TV device and configure iSponsorBlockTV.
+4. Once the wizard finishes, the app starts automatically with your configuration.
 
-```bash
-CONTAINER=$(sudo docker ps --filter name=isponsorblocktv --format "{{.Names}}" | head -1)
-IMAGE=$(sudo docker inspect "$CONTAINER" --format '{{.Config.Image}}')
-DATA=$(sudo docker inspect "$CONTAINER" --format '{{range .Mounts}}{{if eq .Destination "/app/data"}}{{.Source}}{{end}}{{end}}')
+## Changing Your Settings
 
-sudo docker run -it --rm \
-    --network host \
-    -v "$DATA:/app/data" \
-    "$IMAGE" \
-    --setup-cli
-```
+Reopen the app from your Runtipi dashboard to run the setup wizard again. The terminal is locked down to the iSponsorBlockTV setup wizard only — it cannot be used to run arbitrary commands.

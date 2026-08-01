@@ -4,12 +4,29 @@
     {
       "name": "isponsorblocktv",
       "image": "ghcr.io/dmunozv04/isponsorblocktv:v2.10.0",
-      "isMain": true,
       "networkMode": "host",
       "volumes": [
         {
           "hostPath": "${APP_DATA_DIR}/data",
           "containerPath": "/app/data"
+        }
+      ]
+    },
+    {
+      "name": "isponsorblocktv-terminal",
+      "image": "ghcr.io/cmolina/isponsorblocktv-ttyd:v2.10.0",
+      "isMain": true,
+      "internalPort": 7681,
+      "volumes": [
+        {
+          "hostPath": "${APP_DATA_DIR}/data",
+          "containerPath": "/app/data"
+        }
+      ],
+      "environment": [
+        {
+          "key": "TERMINAL_PASSWORD",
+          "value": "${TERMINAL_PASSWORD}"
         }
       ]
     }
