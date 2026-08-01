@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       deployments: write
+      packages: write
+      contents: read
     env:
       RUNTIPI_URL: ${{ secrets.RUNTIPI_URL }}
       CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
@@ -97,6 +99,43 @@ jobs:
               echo "Set APP_PORT=$RP for $URN (was default $PORT)"
             fi
           done
+
+      - name: Set up QEMU (multi-arch builds)
+        if: steps.apps.outputs.list != ''
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: steps.apps.outputs.list != ''
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        if: steps.apps.outputs.list != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push derived images
+        if: steps.apps.outputs.list != ''
+        run: |
+          # Build + publish derived images (e.g. terminal/ wrappers) for changed
+          # apps that declare a terminal/Dockerfile. Tags use the app version
+          # from config.json so docker-compose.json image refs resolve.
+          set -e
+          BUILT=0
+          for APP_ID in ${{ steps.apps.outputs.list }}; do
+            DOCKERFILE="apps/$APP_ID/terminal/Dockerfile"
+            [ -f "$DOCKERFILE" ] || continue
+            VERSION=$(jq -r '.version' "apps/$APP_ID/config.json")
+            echo "Building derived image for $APP_ID at $VERSION"
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              -t "ghcr.io/${{ github.repository_owner }}/$APP_ID-ttyd:$VERSION" \
+              --push "apps/$APP_ID/terminal"
+            BUILT=1
+          done
+          [ "$BUILT" = "1" ] || echo "No derived images to build"
 
       - name: Install apps
         if: steps.apps.outputs.list != ''
