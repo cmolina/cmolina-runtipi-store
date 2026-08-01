@@ -1,0 +1,51 @@
+name: Publish Derived Images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/**'
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU (multi-arch builds)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push all derived images
+        run: |
+          # Publishes every app with a terminal/Dockerfile. The image tag is
+          # derived from apps/<app>/config.json so docker-compose.json refs
+          # (which point at ghcr.io/<owner>/<app>-ttyd:<version>) resolve.
+          set -e
+          BUILT=0
+          for APP_DIR in apps/*/; do
+            APP_ID=$(basename "$APP_DIR")
+            DOCKERFILE="$APP_DIR/terminal/Dockerfile"
+            [ -f "$DOCKERFILE" ] || continue
+            VERSION=$(jq -r '.version' "$APP_DIR/config.json")
+            echo "Building derived image for $APP_ID at $VERSION"
+            docker buildx build \
+              --platform linux/amd64,linux/arm64 \
+              -t "ghcr.io/${{ github.repository_owner }}/$APP_ID-ttyd:$VERSION" \
+              --push "$APP_DIR/terminal"
+            BUILT=1
+          done
+          [ "$BUILT" = "1" ] || echo "No derived images to build"
