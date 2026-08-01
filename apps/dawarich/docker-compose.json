@@ -52,7 +52,7 @@
     },
     {
       "name": "dawarich_app",
-      "image": "freikin/dawarich:1.10.1",
+      "image": "freikin/dawarich:1.10.3",
       "isMain": true,
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
@@ -125,6 +125,13 @@
         { "key": "SMTP_AUTHENTICATION", "value": "${SMTP_AUTHENTICATION}" },
         { "key": "SMTP_OPEN_TIMEOUT", "value": "${SMTP_OPEN_TIMEOUT}" },
         { "key": "SMTP_READ_TIMEOUT", "value": "${SMTP_READ_TIMEOUT}" },
+        { "key": "DOMAIN", "value": "${DOMAIN}" },
+        { "key": "DISTANCE_UNIT", "value": "${DISTANCE_UNIT}" },
+        { "key": "SMTP_SERVER", "value": "${SMTP_SERVER}" },
+        { "key": "SMTP_PORT", "value": "${SMTP_PORT}" },
+        { "key": "SMTP_USERNAME", "value": "${SMTP_USERNAME}" },
+        { "key": "SMTP_PASSWORD", "value": "${SMTP_PASSWORD}" },
+        { "key": "SMTP_FROM", "value": "${SMTP_FROM}" },
         { "key": "WEB_CONCURRENCY", "value": "1" }
       ],
       "logging": {
@@ -156,7 +163,7 @@
     },
     {
       "name": "dawarich_sidekiq",
-      "image": "freikin/dawarich:1.10.1",
+      "image": "freikin/dawarich:1.10.3",
       "isMain": false,
       "entrypoint": "sidekiq-entrypoint.sh",
       "volumes": [
