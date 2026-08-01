@@ -45,8 +45,8 @@
       "healthCheck": {
         "test": "pg_isready -U postgres -d dawarich_production",
         "interval": "10s",
-        "retries": 5,
-        "startPeriod": "30s",
+        "retries": 10,
+        "startPeriod": "60s",
         "timeout": "10s"
       }
     },
@@ -149,13 +149,13 @@
         "timeout": "10s"
       },
       "dependsOn": {
-        "dawarich_db": { "condition": "service_healthy" },
-        "dawarich_redis": { "condition": "service_healthy" }
+        "dawarich_db": { "condition": "service_started" },
+        "dawarich_redis": { "condition": "service_started" }
       },
       "deploy": {
         "resources": {
           "limits": {
-            "cpus": "0.50",
+            "cpus": "1.0",
             "memory": "4G"
           }
         }
@@ -230,9 +230,9 @@
         "timeout": "10s"
       },
       "dependsOn": {
-        "dawarich_db": { "condition": "service_healthy" },
-        "dawarich_redis": { "condition": "service_healthy" },
-        "dawarich_app": { "condition": "service_healthy" }
+        "dawarich_db": { "condition": "service_started" },
+        "dawarich_redis": { "condition": "service_started" },
+        "dawarich_app": { "condition": "service_started" }
       }
     }
   ]
