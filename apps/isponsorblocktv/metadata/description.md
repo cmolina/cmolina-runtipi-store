@@ -12,9 +12,8 @@ iSponsorBlockTV connects to your YouTube TV app and automatically skips sponsore
 ## Initial Setup
 
 1. Open the app from your Runtipi dashboard. A web terminal opens in your browser.
-2. Enter the **setup terminal password** you chose during installation (user: `setup`).
-3. Follow the interactive prompts in the terminal to pair your YouTube TV device and configure iSponsorBlockTV.
-4. Once the wizard finishes, the app starts automatically with your configuration.
+2. Follow the interactive prompts in the terminal to pair your YouTube TV device and configure iSponsorBlockTV.
+3. Once the wizard finishes, the app starts automatically with your configuration.
 
 ## Changing Your Settings
 
