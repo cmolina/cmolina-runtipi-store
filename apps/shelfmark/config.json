@@ -7,8 +7,8 @@
   "port": 8084,
   "categories": ["books", "media"],
   "description": "Shelfmark is a self-hosted web interface for discovering and downloading books and audiobooks from multiple sources. It aggregates web, torrent, usenet, and IRC sources into a unified search interface with metadata enrichment from Hardcover, Open Library, and Google Books. Supports multi-user request workflows, real-time download progress tracking, and integrations with Calibre, Calibre-Web, Grimmory, and Audiobookshelf.",
-  "tipi_version": 5,
-  "version": "v1.3.4",
+  "tipi_version": 6,
+  "version": "v1.3.5",
   "source": "https://github.com/calibrain/shelfmark",
   "website": "https://github.com/calibrain/shelfmark",
   "exposable": true,
@@ -49,5 +49,5 @@
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
   "created_at": 1777651626000,
-  "updated_at": 1785179241861
+  "updated_at": 1785554332633
 }
