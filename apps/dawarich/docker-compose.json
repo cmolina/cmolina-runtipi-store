@@ -28,7 +28,7 @@
       "shmSize": "1G",
       "volumes": [
         {
-          "hostPath": "${APP_DATA_DIR}/data/postgres",
+          "hostPath": "${APP_DATA_DIR}/data/postgres-fresh",
           "containerPath": "/var/lib/postgresql/data"
         },
         {
@@ -70,7 +70,7 @@
           "containerPath": "/var/app/storage"
         },
         {
-          "hostPath": "${APP_DATA_DIR}/data/postgres",
+          "hostPath": "${APP_DATA_DIR}/data/postgres-fresh",
           "containerPath": "/dawarich_db_data"
         }
       ],
