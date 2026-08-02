@@ -162,12 +162,40 @@ jobs:
           echo "success_apps=${SUCCESS_APPS# }" >> "$GITHUB_OUTPUT"
           echo "failed_apps=${FAILED_APPS# }" >> "$GITHUB_OUTPUT"
 
+      - name: Verify previews return HTTP 2xx
+        if: steps.apps.outputs.list != ''
+        id: health
+        run: |
+          source /tmp/runtipi.sh
+          STORE="pr-${{ github.event.number }}"
+          HEALTHY_APPS=""
+          FAILED_APPS="${{ steps.install.outputs.failed_apps }}"
+          for APP_ID in ${{ steps.install.outputs.success_apps }}; do
+            CONFIG="apps/$APP_ID/config.json"
+            PORT=$(jq -r '.port // empty' "$CONFIG" 2>/dev/null)
+            if [ -z "$PORT" ]; then
+              echo "Skipping HTTP check for $APP_ID: no public port"
+              HEALTHY_APPS="$HEALTHY_APPS $APP_ID"
+              continue
+            fi
+            URL="https://${APP_ID}-${STORE}-preview.cmolina.cl"
+            if wait_for_http_2xx "$URL" 120; then
+              echo "OK: $APP_ID -> $URL"
+              HEALTHY_APPS="$HEALTHY_APPS $APP_ID"
+            else
+              echo "::error::$APP_ID never returned HTTP 2xx at $URL"
+              FAILED_APPS="$FAILED_APPS $APP_ID"
+            fi
+          done
+          echo "success_apps=${HEALTHY_APPS# }" >> "$GITHUB_OUTPUT"
+          echo "failed_apps=${FAILED_APPS# }" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub deployments
         if: steps.apps.outputs.list != ''
         uses: actions/github-script@v7
         env:
-          SUCCESS_APPS: ${{ steps.install.outputs.success_apps }}
-          FAILED_APPS: ${{ steps.install.outputs.failed_apps }}
+          SUCCESS_APPS: ${{ steps.health.outputs.success_apps }}
+          FAILED_APPS: ${{ steps.health.outputs.failed_apps }}
         with:
           script: |
             const ref = context.payload.pull_request.head.ref;
@@ -198,7 +226,7 @@ jobs:
             for (const appId of failedApps)  await deploy(appId, 'failure');
 
       - name: Fail job if any app failed to deploy
-        if: steps.apps.outputs.list != '' && steps.install.outputs.failed_apps != ''
+        if: steps.apps.outputs.list != '' && steps.health.outputs.failed_apps != ''
         run: |
-          echo "::error::Failed to deploy apps: ${{ steps.install.outputs.failed_apps }}"
+          echo "::error::Failed to deploy apps: ${{ steps.health.outputs.failed_apps }}"
           exit 1

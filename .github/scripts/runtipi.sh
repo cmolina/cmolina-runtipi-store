@@ -35,3 +35,20 @@ wait_for_app_status() {
   echo "[wait] $urn timed out after ${elapsed}s, last status=$status" >&2
   return 1
 }
+
+# Docker status "running" does not mean the app serves HTTP, so verify the
+# public preview returns 2xx (adapting through any 3xx redirect) before success.
+wait_for_http_2xx() {
+  local url="$1" timeout="${2:-120}" elapsed=0 code
+  while [ "$elapsed" -lt "$timeout" ]; do
+    code=$(curl -s -o /dev/null -L --max-time 10 -w '%{http_code}' "$url" 2>/dev/null || echo 000)
+    echo "[http] $url -> HTTP $code (${elapsed}s elapsed)" >&2
+    case "$code" in
+      2*) return 0 ;;
+    esac
+    sleep 5
+    elapsed=$((elapsed + 5))
+  done
+  echo "[http] $url never returned 2xx after ${timeout}s, last=$code" >&2
+  return 1
+}
