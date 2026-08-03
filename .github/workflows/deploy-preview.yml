@@ -190,6 +190,25 @@ jobs:
           echo "success_apps=${HEALTHY_APPS# }" >> "$GITHUB_OUTPUT"
           echo "failed_apps=${FAILED_APPS# }" >> "$GITHUB_OUTPUT"
 
+      - name: Dump logs for failed preview apps
+        if: steps.health.outputs.failed_apps != ''
+        run: |
+          source /tmp/runtipi.sh
+          STORE="pr-${{ github.event.number }}"
+          for APP_ID in ${{ steps.health.outputs.failed_apps }}; do
+            URN="${APP_ID}:${STORE}"
+            echo "===== container logs for $URN ====="
+            curl -sN --max-time 15 \
+              -b /tmp/jar -c /tmp/jar \
+              -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+              -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+              "$RUNTIPI_URL/api/sse/app-logs?appUrn=${URN}&maxLines=200" \
+              | sed -n 's/^data: //p' \
+              | jq -r 'select(.event == "newLogs") | .lines[]?' \
+              | sed 's/<[^>]*>//g' \
+              || true
+          done
+
       - name: Create GitHub deployments
         if: steps.apps.outputs.list != ''
         uses: actions/github-script@v7
