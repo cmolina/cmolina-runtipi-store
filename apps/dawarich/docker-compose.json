@@ -26,9 +26,10 @@
       "image": "postgis/postgis:17-3.5-alpine",
       "isMain": false,
       "shmSize": "1G",
+      "entrypoint": ["/bin/sh", "-c", "sleep 10 && chmod 0700 /var/lib/postgresql/data && exec /usr/local/bin/docker-entrypoint.sh postgres"],
       "volumes": [
         {
-          "hostPath": "${APP_DATA_DIR}/data/postgres-fresh",
+          "hostPath": "${APP_DATA_DIR}/data/postgres",
           "containerPath": "/var/lib/postgresql/data"
         },
         {
@@ -70,7 +71,7 @@
           "containerPath": "/var/app/storage"
         },
         {
-          "hostPath": "${APP_DATA_DIR}/data/postgres-fresh",
+          "hostPath": "${APP_DATA_DIR}/data/postgres",
           "containerPath": "/dawarich_db_data"
         }
       ],
