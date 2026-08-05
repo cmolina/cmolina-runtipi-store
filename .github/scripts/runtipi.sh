@@ -22,15 +22,16 @@ runtipi() {
 }
 
 wait_for_app_status() {
-  local urn="$1" target="$2" timeout="${3:-120}"
-  local elapsed=0
-  local status
+  local urn="$1" target="$2" timeout="${3:-300}"
+  local elapsed=0 delay=1 status
   while [ "$elapsed" -lt "$timeout" ]; do
     status=$(runtipi GET /api/apps/$urn 2>/dev/null | jq -r '.app.status // "missing"' 2>/dev/null)
     echo "[wait] $urn status=$status (target=$target, ${elapsed}s elapsed)" >&2
     [ "$status" = "$target" ] && return 0
-    sleep 5
-    elapsed=$((elapsed + 5))
+    sleep "$delay"
+    elapsed=$((elapsed + delay))
+    delay=$((delay * 2))
+    [ "$delay" -gt 30 ] && delay=30
   done
   echo "[wait] $urn timed out after ${elapsed}s, last status=$status" >&2
   return 1
@@ -39,15 +40,17 @@ wait_for_app_status() {
 # Docker status "running" does not mean the app serves HTTP, so verify the
 # public preview returns 2xx (adapting through any 3xx redirect) before success.
 wait_for_http_2xx() {
-  local url="$1" timeout="${2:-120}" elapsed=0 code
+  local url="$1" timeout="${2:-300}" elapsed=0 delay=1 code
   while [ "$elapsed" -lt "$timeout" ]; do
     code=$(curl -s -o /dev/null -L --max-time 10 -w '%{http_code}' "$url" 2>/dev/null || echo 000)
     echo "[http] $url -> HTTP $code (${elapsed}s elapsed)" >&2
     case "$code" in
       2*) return 0 ;;
     esac
-    sleep 5
-    elapsed=$((elapsed + 5))
+    sleep "$delay"
+    elapsed=$((elapsed + delay))
+    delay=$((delay * 2))
+    [ "$delay" -gt 30 ] && delay=30
   done
   echo "[http] $url never returned 2xx after ${timeout}s, last=$code" >&2
   return 1

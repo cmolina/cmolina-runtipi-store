@@ -153,7 +153,7 @@ jobs:
             wait_for_app_status "$URN" "missing" 60 || true
             FORM=$(STORE="$STORE" python3 /tmp/gen_form.py "$CONFIG")
             runtipi POST "/api/app-lifecycle/$URN/install" -d "$FORM" > /dev/null
-            if wait_for_app_status "$URN" "running" 120; then
+            if wait_for_app_status "$URN" "running" 300; then
               SUCCESS_APPS="$SUCCESS_APPS $APP_ID"
             else
               FAILED_APPS="$FAILED_APPS $APP_ID"
@@ -179,7 +179,7 @@ jobs:
               continue
             fi
             URL="https://${APP_ID}-${STORE}-preview.cmolina.cl"
-            if wait_for_http_2xx "$URL" 120; then
+            if wait_for_http_2xx "$URL" 300; then
               echo "OK: $APP_ID -> $URL"
               HEALTHY_APPS="$HEALTHY_APPS $APP_ID"
             else
