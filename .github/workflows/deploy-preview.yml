@@ -169,7 +169,7 @@ jobs:
               done
             fi
             runtipi POST "/api/app-lifecycle/$URN/install" -d "$FORM" > /dev/null
-            if wait_for_app_status "$URN" "running" 300; then
+            if wait_for_app_status "$URN" "running" 600; then
               SUCCESS_APPS="$SUCCESS_APPS $APP_ID"
             else
               FAILED_APPS="$FAILED_APPS $APP_ID"
@@ -213,9 +213,12 @@ jobs:
               continue
             fi
             # Transfer the backup from the production store to the preview store
+            # NOTE: runtipi's AuthGuard rejects session-auth unsafe methods (POST/PUT/...)
+            # without a matching Origin/Referer header, so mirror runtipi()'s Origin header.
             if ! curl -fsSL -b /tmp/jar -c /tmp/jar \
               -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
               -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+              -H "Origin: $RUNTIPI_URL" \
               -o "/tmp/$FILENAME" \
               "$RUNTIPI_URL/api/backups/$PROD_URN/$FILENAME/download" || ! gzip -t "/tmp/$FILENAME"; then
               echo "::error::$APP_ID backup download failed; deploying empty preview"
@@ -227,6 +230,7 @@ jobs:
             if ! curl -fsSL -b /tmp/jar -c /tmp/jar \
               -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
               -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+              -H "Origin: $RUNTIPI_URL" \
               -F "file=@/tmp/$FILENAME;filename=$FILENAME" \
               "$RUNTIPI_URL/api/backups/$URN/upload" > /dev/null; then
               echo "::error::$APP_ID backup upload failed; deploying empty preview"
