@@ -180,9 +180,11 @@ jobs:
 
       - name: Copy production data to previews
         if: steps.apps.outputs.list != ''
+        id: copy
         run: |
           source /tmp/runtipi.sh
           STORE="pr-${{ github.event.number }}"
+          COPY_FAILED=""
           for APP_ID in ${{ steps.install.outputs.success_apps }}; do
             URN="${APP_ID}:${STORE}"
             PROD_URN="${APP_ID}:cmolina"
@@ -200,14 +202,25 @@ jobs:
             # Snapshot the production app (briefly stops it; runtipi restarts it)
             BEFORE=$(runtipi GET "/api/backups/$PROD_URN?page=1&pageSize=1" 2>/dev/null | jq -r '.data[0].id // "none"')
             runtipi POST "/api/backups/$PROD_URN/backup" > /dev/null
+            # The backup runs asynchronously on runtipi's shared app-events queue
+            # (workers: 3, jobs may be backlogged), so poll for up to 600s. Bail
+            # early if the prod app drops from running to stopped: the backup job
+            # failed server-side (emitError leaves status stopped).
             FILENAME=""
-            for i in $(seq 1 60); do
+            for i in $(seq 1 120); do
               sleep 5
               NOW=$(runtipi GET "/api/backups/$PROD_URN?page=1&pageSize=1" 2>/dev/null | jq -r '.data[0].id // "none"')
               if [ -n "$NOW" ] && [ "$NOW" != "$BEFORE" ]; then FILENAME="$NOW"; break; fi
+              PSTATUS=$(runtipi GET "/api/apps/$PROD_URN" 2>/dev/null | jq -r '.app.status // "missing"')
+              if [ "$PSTATUS" = "stopped" ] && [ "$PROD_STATUS" = "running" ]; then
+                echo "::warning::$APP_ID prod app dropped to stopped during backup wait (backup job likely failed)"
+                break
+              fi
+              [ "$PSTATUS" = "missing" ] && break
             done
             if [ -z "$FILENAME" ]; then
-              echo "::warning::$APP_ID backup did not appear within 300s; deploying empty preview"
+              echo "::error::$APP_ID backup did not appear within 600s; deploying empty preview"
+              COPY_FAILED="$COPY_FAILED $APP_ID"
               runtipi POST "/api/app-lifecycle/$URN/start" > /dev/null || true
               wait_for_app_status "$URN" "running" 120 || true
               continue
@@ -223,6 +236,7 @@ jobs:
               "$RUNTIPI_URL/api/backups/$PROD_URN/$FILENAME/download" || ! gzip -t "/tmp/$FILENAME"; then
               echo "::error::$APP_ID backup download failed; deploying empty preview"
               rm -f "/tmp/$FILENAME"
+              COPY_FAILED="$COPY_FAILED $APP_ID"
               runtipi POST "/api/app-lifecycle/$URN/start" > /dev/null || true
               wait_for_app_status "$URN" "running" 120 || true
               continue
@@ -235,6 +249,7 @@ jobs:
               "$RUNTIPI_URL/api/backups/$URN/upload" > /dev/null; then
               echo "::error::$APP_ID backup upload failed; deploying empty preview"
               rm -f "/tmp/$FILENAME"
+              COPY_FAILED="$COPY_FAILED $APP_ID"
               runtipi POST "/api/app-lifecycle/$URN/start" > /dev/null || true
               wait_for_app_status "$URN" "running" 120 || true
               continue
@@ -250,6 +265,7 @@ jobs:
             done
             if [ "$STATUS" != "stopped" ]; then
               echo "::warning::$APP_ID restore did not finish cleanly (status=$STATUS)"
+              COPY_FAILED="$COPY_FAILED $APP_ID"
             fi
             # Re-apply the random APP_PORT chosen for this preview
             RP=$(awk -v a="$APP_ID" '$1==a {print $2}' /tmp/app_ports.tsv)
@@ -261,8 +277,12 @@ jobs:
             # Start the preview against the restored data (env is regenerated
             # from the stored config, which reuses production credentials)
             runtipi POST "/api/app-lifecycle/$URN/start" > /dev/null
-            wait_for_app_status "$URN" "running" 180 || echo "::error::$APP_ID did not reach running after data restore"
+            if ! wait_for_app_status "$URN" "running" 180; then
+              echo "::error::$APP_ID did not reach running after data restore"
+              COPY_FAILED="$COPY_FAILED $APP_ID"
+            fi
           done
+          echo "copy_failed_apps=${COPY_FAILED# }" >> "$GITHUB_OUTPUT"
 
       - name: Verify previews return HTTP 2xx
         if: steps.apps.outputs.list != ''
@@ -271,7 +291,8 @@ jobs:
           source /tmp/runtipi.sh
           STORE="pr-${{ github.event.number }}"
           HEALTHY_APPS=""
-          FAILED_APPS="${{ steps.install.outputs.failed_apps }}"
+          COPY_FAILED="${{ steps.copy.outputs.copy_failed_apps }}"
+          FAILED_APPS="${{ steps.install.outputs.failed_apps }} $COPY_FAILED"
           for APP_ID in ${{ steps.install.outputs.success_apps }}; do
             CONFIG="apps/$APP_ID/config.json"
             PORT=$(jq -r '.port // empty' "$CONFIG" 2>/dev/null)
