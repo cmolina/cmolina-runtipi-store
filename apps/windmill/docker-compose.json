@@ -150,45 +150,6 @@
           }
         }
       }
-    },
-    {
-      "name": "windmill_extra",
-      "image": "ghcr.io/windmill-labs/windmill-extra:latest",
-      "isMain": false,
-      "internalPort": 3001,
-      "volumes": [
-        {
-          "hostPath": "${APP_DATA_DIR}/data/lsp-cache",
-          "containerPath": "/pyls/.cache"
-        }
-      ],
-      "environment": [
-        { "key": "ENABLE_LSP", "value": "true" },
-        { "key": "ENABLE_MULTIPLAYER", "value": "false" },
-        { "key": "ENABLE_DEBUGGER", "value": "true" },
-        { "key": "ENABLE_NSJAIL", "value": "false" },
-        { "key": "REQUIRE_SIGNED_DEBUG_REQUESTS", "value": "true" },
-        { "key": "WINDMILL_BASE_URL", "value": "http://windmill_server:8000" }
-      ],
-      "restart": "always",
-      "dependsOn": {
-        "windmill_db": { "condition": "service_healthy" }
-      },
-      "logging": {
-        "driver": "json-file",
-        "options": {
-          "max-size": "10m",
-          "max-file": "3"
-        }
-      },
-      "deploy": {
-        "resources": {
-          "limits": {
-            "cpus": "0.5",
-            "memory": "512M"
-          }
-        }
-      }
     }
   ]
 }

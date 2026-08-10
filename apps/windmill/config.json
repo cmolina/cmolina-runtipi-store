@@ -10,7 +10,7 @@
     "automation"
   ],
   "description": "Windmill is an open-source developer platform for building internal tools: APIs, background jobs, workflows, and UIs. Scripts written in Python, TypeScript, Go, Bash, SQL, and more are automatically turned into sharable UIs. Compose them into workflows, trigger via webhooks, schedules, or HTTP routes, and build rich low-code UIs on top \u2014 all self-hosted.",
-  "tipi_version": 8,
+  "tipi_version": 9,
   "version": "v1.783.0",
   "source": "https://github.com/windmill-labs/windmill",
   "website": "https://www.windmill.dev",
@@ -41,5 +41,5 @@
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
   "created_at": 1783531674000,
-  "updated_at": 1786249384125
+  "updated_at": 1786369864163
 }
