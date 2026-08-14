@@ -3,7 +3,7 @@
   "services": [
     {
       "name": "shelfmark",
-      "image": "ghcr.io/calibrain/shelfmark:v1.3.5",
+      "image": "ghcr.io/calibrain/shelfmark:v1.3.7",
       "isMain": true,
       "internalPort": 8084,
       "environment": [
