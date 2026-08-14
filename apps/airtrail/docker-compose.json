@@ -27,7 +27,7 @@
     },
     {
       "name": "airtrail",
-      "image": "johly/airtrail:v3.11.1",
+      "image": "johly/airtrail:v3.12.0",
       "isMain": true,
       "internalPort": 3000,
       "environment": [
@@ -36,7 +36,8 @@
         { "key": "DB_PASSWORD", "value": "${AIRTRAIL_DB_PASSWORD}" },
         { "key": "DB_DATABASE_NAME", "value": "airtrail" },
         { "key": "DB_USERNAME", "value": "airtrail" },
-        { "key": "UPLOAD_LOCATION", "value": "/app/uploads" }
+        { "key": "UPLOAD_LOCATION", "value": "/app/uploads" },
+        { "key": "BODY_SIZE_LIMIT", "value": "20M" }
       ],
       "volumes": [
         {

@@ -7,8 +7,8 @@
   "port": 3000,
   "categories": ["utilities"],
   "description": "AirTrail is a modern, open-source personal flight tracking system that lets you log, visualize, and analyze your entire aviation history. Track flights on an interactive world map, gather statistics on your travel patterns, and import flight data from popular services like MyFlightRadar24, Flighty, TripIt, and more.",
-  "tipi_version": 2,
-  "version": "3.11.1",
+  "tipi_version": 3,
+  "version": "3.12.0",
   "source": "https://github.com/johanohly/AirTrail",
   "website": "https://airtrail.johan.ohly.dk",
   "exposable": true,
@@ -27,5 +27,5 @@
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
   "created_at": 1750636800000,
-  "updated_at": 1784519601004
+  "updated_at": 1786676625538
 }
