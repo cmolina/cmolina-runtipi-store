@@ -53,7 +53,7 @@
     },
     {
       "name": "dawarich_app",
-      "image": "freikin/dawarich:1.11.0",
+      "image": "freikin/dawarich:1.12.1",
       "isMain": true,
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
@@ -133,6 +133,7 @@
         { "key": "SMTP_USERNAME", "value": "${SMTP_USERNAME}" },
         { "key": "SMTP_PASSWORD", "value": "${SMTP_PASSWORD}" },
         { "key": "SMTP_FROM", "value": "${SMTP_FROM}" },
+        { "key": "SKIP_VISITS_FLEET_REDETECT", "value": "${SKIP_VISITS_FLEET_REDETECT}" },
         { "key": "WEB_CONCURRENCY", "value": "1" }
       ],
       "logging": {
@@ -164,7 +165,7 @@
     },
     {
       "name": "dawarich_sidekiq",
-      "image": "freikin/dawarich:1.11.0",
+      "image": "freikin/dawarich:1.12.1",
       "isMain": false,
       "entrypoint": "sidekiq-entrypoint.sh",
       "volumes": [
@@ -214,7 +215,8 @@
         { "key": "GEOAPIFY_API_KEY", "value": "${GEOAPIFY_API_KEY}" },
         { "key": "NOMINATIM_API_HOST", "value": "${NOMINATIM_API_HOST}" },
         { "key": "NOMINATIM_API_KEY", "value": "${NOMINATIM_API_KEY}" },
-        { "key": "NOMINATIM_API_USE_HTTPS", "value": "${NOMINATIM_API_USE_HTTPS}" }
+        { "key": "NOMINATIM_API_USE_HTTPS", "value": "${NOMINATIM_API_USE_HTTPS}" },
+        { "key": "SKIP_VISITS_FLEET_REDETECT", "value": "${SKIP_VISITS_FLEET_REDETECT}" }
       ],
       "logging": {
         "driver": "json-file",

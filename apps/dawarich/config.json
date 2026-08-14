@@ -7,8 +7,8 @@
   "port": 3030,
   "categories": ["utilities", "network"],
   "description": "Dawarich is a self-hosted alternative to Google Location History. Track your location history, visualize it on a map, and have complete control over your data.",
-  "tipi_version": 27,
-  "version": "1.11.0",
+  "tipi_version": 28,
+  "version": "1.12.1",
   "source": "https://github.com/Freika/dawarich",
   "website": "https://dawarich.app",
   "exposable": true,
@@ -53,10 +53,11 @@
     { "type": "text", "label": "SMTP Port", "env_variable": "SMTP_PORT", "required": false, "hint": "Your SMTP port (typically 587 for TLS)" },
     { "type": "text", "label": "SMTP Username", "env_variable": "SMTP_USERNAME", "required": false, "hint": "Your SMTP username" },
     { "type": "password", "label": "SMTP Password", "env_variable": "SMTP_PASSWORD", "required": false, "hint": "Your SMTP password" },
-    { "type": "text", "label": "SMTP From", "env_variable": "SMTP_FROM", "required": false, "hint": "Email address to send emails from" }
+    { "type": "text", "label": "SMTP From", "env_variable": "SMTP_FROM", "required": false, "hint": "Email address to send emails from" },
+    { "type": "boolean", "label": "Skip Visits Fleet Re-Detection", "env_variable": "SKIP_VISITS_FLEET_REDETECT", "default": false, "required": false, "hint": "Opt out of the automatic visits re-detection that runs after migrating to 1.12.0. Enable only if you want to keep existing visit detection." }
   ],
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
   "created_at": 1738700000000,
-  "updated_at": 1785941795380
+  "updated_at": 1786676625538
 }
