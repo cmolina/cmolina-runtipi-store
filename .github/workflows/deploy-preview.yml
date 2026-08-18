@@ -70,6 +70,22 @@ jobs:
           runtipi POST /api/marketplace/create -d "$CREATE_BODY" > /dev/null || true
           runtipi POST /api/marketplace/pull > /dev/null
 
+      - name: Clean up stale preview stores
+        if: steps.apps.outputs.list != ''
+        run: |
+          source /tmp/runtipi.sh
+          STORE="pr-${{ github.event.number }}"
+          for URN in $(installed_urns); do
+            case "$URN" in
+              *":$STORE") continue ;;
+              *:pr-*)
+                echo "Uninstalling stale preview app $URN"
+                runtipi DELETE "/api/app-lifecycle/$URN/uninstall" -d '{"removeBackups":true}' > /dev/null || true
+                wait_for_app_status "$URN" "missing" 120 || true
+                ;;
+            esac
+          done
+
       - name: Set random APP_PORT via user-config appEnv (avoid conflicts with production)
         if: steps.apps.outputs.list != ''
         run: |
@@ -168,11 +184,41 @@ jobs:
                 [ -n "$VAL" ] && FORM=$(echo "$FORM" | jq -c --arg k "$ENV" --arg v "$VAL" '.[$k] = $v')
               done
             fi
-            runtipi POST "/api/app-lifecycle/$URN/install" -d "$FORM" > /dev/null
-            if wait_for_app_status "$URN" "running" 600; then
+            rm -f /tmp/install_resp.json
+            runtipi POST "/api/app-lifecycle/$URN/install" -d "$FORM" > /tmp/install_resp.json
+            INSTALL_CODE=$RUNTIPI_HTTP_CODE
+            RESP=$(cat /tmp/install_resp.json)
+            case "$INSTALL_CODE" in
+              2*) ;;
+              *)
+                # Retry once: store DB record can vanish after a host restart (root cause of the 2026-08-14 500s)
+                if echo "$RESP" | grep -q "not found"; then
+                  echo "::warning::$APP_ID store missing (HTTP $INSTALL_CODE); recreating store $STORE and retrying once"
+                  BRANCH_URL="https://github.com/${{ github.repository }}/tree/${{ github.head_ref }}"
+                  CREATE_BODY=$(jq -n --arg name "$STORE" --arg url "$BRANCH_URL" '{name: $name, url: $url}')
+                  runtipi POST /api/marketplace/create -d "$CREATE_BODY" > /dev/null || true
+                  runtipi POST /api/marketplace/pull > /dev/null
+                  runtipi POST "/api/app-lifecycle/$URN/install" -d "$FORM" > /tmp/install_resp.json
+                  INSTALL_CODE=$RUNTIPI_HTTP_CODE
+                  RESP=$(cat /tmp/install_resp.json)
+                fi
+                case "$INSTALL_CODE" in
+                  2*) ;;
+                  *)
+                    echo "::error::$APP_ID install rejected: HTTP $INSTALL_CODE $RESP"
+                    FAILED_APPS="$FAILED_APPS $APP_ID"
+                    dump_app_logs "$URN"
+                    continue
+                    ;;
+                esac
+                ;;
+            esac
+            if wait_for_app_terminal "$URN" 600 300; then
               SUCCESS_APPS="$SUCCESS_APPS $APP_ID"
             else
+              echo "::error::$APP_ID install did not reach running"
               FAILED_APPS="$FAILED_APPS $APP_ID"
+              dump_app_logs "$URN"
             fi
           done
           echo "success_apps=${SUCCESS_APPS# }" >> "$GITHUB_OUTPUT"
