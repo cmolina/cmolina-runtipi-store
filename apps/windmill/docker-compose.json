@@ -27,7 +27,7 @@
     },
     {
       "name": "windmill_server",
-      "image": "ghcr.io/windmill-labs/windmill:1.789.0",
+      "image": "ghcr.io/windmill-labs/windmill:1.793.0",
       "isMain": true,
       "internalPort": 8000,
       "exposePort": 2525,
@@ -73,7 +73,7 @@
     },
     {
       "name": "windmill_worker",
-      "image": "ghcr.io/windmill-labs/windmill:1.789.0",
+      "image": "ghcr.io/windmill-labs/windmill:1.793.0",
       "isMain": false,
       "privileged": true,
       "volumes": [
@@ -116,7 +116,7 @@
     },
     {
       "name": "windmill_worker_native",
-      "image": "ghcr.io/windmill-labs/windmill:1.789.0",
+      "image": "ghcr.io/windmill-labs/windmill:1.793.0",
       "isMain": false,
       "volumes": [
         {
