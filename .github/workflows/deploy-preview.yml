@@ -164,6 +164,7 @@ jobs:
           source /tmp/runtipi.sh
           STORE="pr-${{ github.event.number }}"
           SUCCESS_APPS=""
+          STOPPED_APPS=""
           FAILED_APPS=""
           for APP_ID in ${{ steps.apps.outputs.list }}; do
             CONFIG="apps/$APP_ID/config.json"
@@ -216,12 +217,25 @@ jobs:
             if wait_for_app_terminal "$URN" 600 300; then
               SUCCESS_APPS="$SUCCESS_APPS $APP_ID"
             else
-              echo "::error::$APP_ID install did not reach running"
-              FAILED_APPS="$FAILED_APPS $APP_ID"
-              dump_app_logs "$URN"
+              # wait_for_app_terminal: 0=running, 1=terminal stopped/missing,
+              # 2=never reached a terminal state. Return 1 is a normal first-run
+              # state for data-awaiting apps (e.g. iSponsorBlockTV exits because
+              # no device is configured yet) - send those to the copy step so the
+              # prod data (the configured devices) is restored before judging them.
+              # Only a genuine timeout (2) or an install rejection is a hard failure.
+              rc=$?
+              if [ "$rc" -eq 1 ]; then
+                echo "::warning::$APP_ID reached stopped (awaiting data restore); will restore then re-check"
+                STOPPED_APPS="$STOPPED_APPS $APP_ID"
+              else
+                echo "::error::$APP_ID install did not reach running"
+                FAILED_APPS="$FAILED_APPS $APP_ID"
+                dump_app_logs "$URN"
+              fi
             fi
           done
           echo "success_apps=${SUCCESS_APPS# }" >> "$GITHUB_OUTPUT"
+          echo "stopped_apps=${STOPPED_APPS# }" >> "$GITHUB_OUTPUT"
           echo "failed_apps=${FAILED_APPS# }" >> "$GITHUB_OUTPUT"
 
       - name: Copy production data to previews
@@ -231,7 +245,12 @@ jobs:
           source /tmp/runtipi.sh
           STORE="pr-${{ github.event.number }}"
           COPY_FAILED=""
-          for APP_ID in ${{ steps.install.outputs.success_apps }}; do
+          # Restore prod data for apps that reached running AND apps that reached
+          # a terminal stopped state (data-awaiting apps like iSponsorBlockTV): a
+          # stopped app only needs its configured data to start, and the restore
+          # carries it. Only genuine install failures/timeouts are excluded.
+          RESTORE_APPS="${{ steps.install.outputs.success_apps }} ${{ steps.install.outputs.stopped_apps }}"
+          for APP_ID in $(echo "$RESTORE_APPS" | tr ' ' '\n' | grep -v '^$' | sort -u); do
             URN="${APP_ID}:${STORE}"
             PROD_URN="${APP_ID}:cmolina"
             PROD_STATUS=$(runtipi GET "/api/apps/$PROD_URN" 2>/dev/null | jq -r '.app.status // "missing"')
@@ -242,9 +261,13 @@ jobs:
             echo "Copying data from $PROD_URN to $URN"
             # Stop the preview so restore leaves it stopped and we can re-apply
             # the preview APP_PORT before starting (restore replaces user-config
-            # with production's).
-            runtipi POST "/api/app-lifecycle/$URN/stop" > /dev/null
-            wait_for_app_status "$URN" "stopped" 120 || echo "warn: $URN did not stop cleanly"
+            # with production's). Skip the stop for apps already in a terminal
+            # stopped/missing state - data-awaiting apps reach restore that way.
+            PREVIEW_STATUS=$(runtipi GET "/api/apps/$URN" 2>/dev/null | jq -r '.app.status // "missing"')
+            if [ "$PREVIEW_STATUS" != "stopped" ] && [ "$PREVIEW_STATUS" != "missing" ]; then
+              runtipi POST "/api/app-lifecycle/$URN/stop" > /dev/null
+              wait_for_app_status "$URN" "stopped" 120 || echo "warn: $URN did not stop cleanly"
+            fi
             # Snapshot the production app (briefly stops it; runtipi restarts it)
             BEFORE=$(runtipi GET "/api/backups/$PROD_URN?page=1&pageSize=1" 2>/dev/null | jq -r '.data[0].id // "none"')
             runtipi POST "/api/backups/$PROD_URN/backup" > /dev/null
@@ -339,7 +362,15 @@ jobs:
           HEALTHY_APPS=""
           COPY_FAILED="${{ steps.copy.outputs.copy_failed_apps }}"
           FAILED_APPS="${{ steps.install.outputs.failed_apps }} $COPY_FAILED"
-          for APP_ID in ${{ steps.install.outputs.success_apps }}; do
+          # Verify every app we expect to be running: apps that reached running
+          # plus stopped apps that were restored with prod data. Skip any app
+          # already failed during install/copy.
+          CHECK_APPS="${{ steps.install.outputs.success_apps }} ${{ steps.install.outputs.stopped_apps }}"
+          for APP_ID in $(echo "$CHECK_APPS" | tr ' ' '\n' | grep -v '^$' | sort -u); do
+            if echo "$FAILED_APPS" | grep -qw "$APP_ID"; then
+              echo "Skipping HTTP check for $APP_ID: already failed (install/copy)"
+              continue
+            fi
             CONFIG="apps/$APP_ID/config.json"
             PORT=$(jq -r '.port // empty' "$CONFIG" 2>/dev/null)
             if [ -z "$PORT" ]; then
