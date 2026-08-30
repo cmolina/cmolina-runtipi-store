@@ -53,7 +53,7 @@
     },
     {
       "name": "dawarich_app",
-      "image": "freikin/dawarich:1.13.0",
+      "image": "freikin/dawarich:1.14.0",
       "isMain": true,
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
@@ -134,6 +134,8 @@
         { "key": "SMTP_PASSWORD", "value": "${SMTP_PASSWORD}" },
         { "key": "SMTP_FROM", "value": "${SMTP_FROM}" },
         { "key": "SKIP_VISITS_FLEET_REDETECT", "value": "${SKIP_VISITS_FLEET_REDETECT}" },
+        { "key": "VIDEO_RETENTION_DAYS", "value": "30" },
+        { "key": "VIDEO_MAX_PER_USER", "value": "10" },
         { "key": "WEB_CONCURRENCY", "value": "1" }
       ],
       "logging": {
@@ -165,7 +167,7 @@
     },
     {
       "name": "dawarich_sidekiq",
-      "image": "freikin/dawarich:1.13.0",
+      "image": "freikin/dawarich:1.14.0",
       "isMain": false,
       "entrypoint": "sidekiq-entrypoint.sh",
       "volumes": [
