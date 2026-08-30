@@ -6,8 +6,8 @@
   "author": "dmunozv04",
   "categories": ["media", "utilities"],
   "description": "iSponsorBlockTV connects to your YouTube TV app and automatically skips sponsored segments, intros, outros, and other unwanted content using the SponsorBlock API. It can also auto-mute ads and press the Skip Ad button the moment it becomes available.",
-  "tipi_version": 6,
-  "version": "v2.10.0",
+  "tipi_version": 7,
+  "version": "v2.11.0",
   "source": "https://github.com/dmunozv04/iSponsorBlockTV",
   "website": "https://github.com/dmunozv04/iSponsorBlockTV",
   "port": 7681,
@@ -18,5 +18,5 @@
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
   "created_at": 1741564800000,
-  "updated_at": 1785599096000
+  "updated_at": 1788052875631
 }
