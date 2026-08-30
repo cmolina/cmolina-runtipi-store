@@ -40,6 +40,10 @@ def main():
     suffix = f"-{store}" if store else ""
     form["exposed"] = True
     form["domain"] = f"{config['id']}{suffix}-preview.cmolina.cl"
+    # Install WITHOUT starting (skipRun): runtipi keeps the app DB record
+    # (status=stopped) instead of deleting it on first-run container exit, so
+    # the data-restore step can still target the app. See install-app.handler.
+    form["skipRun"] = True
     print(json.dumps(form))
 
 
