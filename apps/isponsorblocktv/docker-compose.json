@@ -14,7 +14,7 @@
     },
     {
       "name": "isponsorblocktv-terminal",
-      "image": "ghcr.io/cmolina/isponsorblocktv-ttyd:v2.10.0",
+      "image": "ghcr.io/cmolina/isponsorblocktv-ttyd:v2.11.0",
       "isMain": true,
       "internalPort": 7681,
       "volumes": [
