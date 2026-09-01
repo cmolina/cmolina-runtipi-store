@@ -15,7 +15,7 @@ metadata:
 1. Fetch the latest release tag from GitHub
 2. Compare it with the current version in `apps/<app>/config.json`
 3. If already up to date — stop and say so
-4. Otherwise: create a new git worktree from `origin/main`, update all version strings, detect new env vars, update `form_fields` and `docker-compose.json` environment sections, bump `tipi_version` and `updated_at`, run tests, ship a PR, and open it in the browser
+4. Otherwise: create a new git worktree from `origin/main`, update all version strings (including the `terminal/Dockerfile` derived-image base, if present), detect new env vars, update `form_fields` and `docker-compose.json` environment sections, bump `tipi_version` and `updated_at`, run tests, ship a PR, and open it in the browser
 
 **Bulk mode** (`/update-app` — no argument): runs the same update logic for every app found in `apps/`, creates one commit per updated app in a single worktree/branch, then opens one consolidated PR.
 
@@ -50,12 +50,13 @@ All file edits for all apps happen inside this single worktree.
 For each app in `$APPS`, run **Steps 0 through 5** from the single-app flow (adapted):
 - **Step 0 variant**: read `config.json` from the worktree file (`$REPO_DIR/all-apps-update/apps/<app>/config.json`) instead of `git show origin/main:…` — the worktree already has the latest main. Still fetch the GitHub release (Step 1) to compare.
 - **Step 1**: fetch latest release, compare versions. If already up to date → skip this app (add to "already up to date" list, continue to next app).
-- **Steps 3–5**: detect env vars, update `config.json` and `docker-compose.json` exactly as in single-app mode.
+- **Steps 3–5b**: detect env vars, update `config.json` and `docker-compose.json`, and sync any `terminal/Dockerfile` base exactly as in single-app mode.
 - After updating each app's files, create a commit for that app only:
 
 ```bash
 cd $REPO_DIR/all-apps-update
 git add apps/<app>/config.json apps/<app>/docker-compose.json
+[ -f "apps/<app>/terminal/Dockerfile" ] && git add "apps/<app>/terminal/Dockerfile"
 git commit --no-gpg-sign -m "Update <AppName> to <new-version>"
 ```
 
@@ -108,6 +109,7 @@ PR body template for bulk mode:
 ### Checklist
 - [x] Each app version bumped in config.json and docker-compose.json
 - [x] tipi_version incremented per app
+- [x] terminal/Dockerfile base synced to the new version (apps with a derived image)
 - [x] Tests pass (`bun run test`)
 ```
 
@@ -288,6 +290,46 @@ Changes to make:
 
 ---
 
+## Step 5b — Sync the derived-image base (terminal Dockerfile)
+
+Some apps ship a custom **derived image** built alongside the app — e.g. an app that wraps its binary in a ttyd web terminal, declared at `apps/<app-name>/terminal/Dockerfile` and referenced in `docker-compose.json` as `ghcr.io/<owner>/<app>-ttyd:<version>`.
+
+These images are **auto-published on tag-from-config** (see `.github/workflows/deploy-preview.yml` and `publish-derived-images.yml`): CI reads the version from `config.json` and pushes `...-ttyd:<version>`. The image's actual **base** is the `FROM` line inside the Dockerfile. If you bump `config.json` but leave the Dockerfile's `FROM` pinned to the old app version, CI publishes a `:new-version` tag that actually contains the **old** app — a silent version drift that's easy to miss because tests never inspect the Dockerfile.
+
+To keep the tag and base in lockstep, after bumping `config.json`:
+
+1. Check whether the app has a terminal Dockerfile:
+
+```bash
+ls "$WORKTREE_DIR/apps/<app-name>/terminal/Dockerfile" 2>/dev/null
+```
+
+2. If present, update every version string in it from the old version to the new version — most importantly the `FROM` line, but also any versioned example tags in its header comment:
+
+```bash
+grep -nE "FROM|v?<old-version>" "$WORKTREE_DIR/apps/<app-name>/terminal/Dockerfile"
+```
+
+Expected shape (iSponsorBlockTV):
+
+```dockerfile
+FROM ghcr.io/dmunozv04/isponsorblocktv:<old-version>
+```
+
+→ rewrite to `<new-version>`, matching the exact format used in `config.json` (leading `v` included if `config.json` uses it).
+
+3. If the app has **no** terminal Dockerfile, skip this step — there is no derived image to drift.
+
+4. Add the Dockerfile to the commit (Step 7 / bulk-mode B2): the derived-image change belongs in the same commit as the version bump. If the Dockerfile exists, include it in the `git add`:
+
+```bash
+git add "apps/<app-name>/terminal/Dockerfile"
+```
+
+The upstream base image tag must exist (verify with a GHCR manifest lookup if unsure), but the app's own release is what drives the version — the base image is the **upstream app's** image, e.g. `ghcr.io/dmunozv04/isponsorblocktv:<version>`.
+
+---
+
 ## Step 6 — Run tests
 
 ```bash
@@ -313,6 +355,7 @@ Then run all subsequent git commands normally.
 
 ```bash
 git add apps/<app-name>/config.json apps/<app-name>/docker-compose.json
+[ -f "apps/<app-name>/terminal/Dockerfile" ] && git add "apps/<app-name>/terminal/Dockerfile"
 git commit --no-gpg-sign -m "Update <AppName> to <new-version>"
 git push -u origin <branch-name>
 ```
@@ -352,6 +395,7 @@ PR body template:
 ### Checklist
 - [x] Version bumped in config.json and docker-compose.json
 - [x] tipi_version incremented
+- [x] terminal/Dockerfile base synced to the new version (if the app has one)
 - [x] Tests pass (`bun run test`)
 ```
 
@@ -373,4 +417,5 @@ PR body template:
 - If the app is already at the latest version, stop and say so
 - If no `.env.example` or compose file is found via `gh api`, skip env var detection and note it in the PR body
 - Match the **exact version string format** already used in `config.json`
+- **ALWAYS sync `apps/<app>/terminal/Dockerfile`** when it exists: update its `FROM` base (and any versioned example tags in its header) to the new version, in the same commit as the config/compose bump. CI tags derived images from `config.json`'s version, so a stale `FROM` publishes a mislabeled tag
 - When in doubt about whether a new env var should be a `form_field`, prefer keeping it internal with a hardcoded default and mention it in the PR body for human review
