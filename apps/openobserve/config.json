@@ -1,0 +1,46 @@
+{
+  "name": "OpenObserve",
+  "id": "openobserve",
+  "available": true,
+  "short_desc": "Unified observability platform for logs, metrics, traces, and RUM",
+  "author": "OpenObserve",
+  "port": 5080,
+  "categories": ["data", "utilities"],
+  "description": "OpenObserve is a cloud-native observability platform built in Rust for logs, metrics, traces, dashboards, alerts, and real user monitoring. It stores data in Parquet columnar format for up to 140x lower storage cost than Elasticsearch, with a single binary that runs on embedded SQLite — no separate database required.",
+  "tipi_version": 1,
+  "version": "v1.0.0",
+  "source": "https://github.com/openobserve/openobserve",
+  "website": "https://openobserve.ai",
+  "exposable": true,
+  "force_expose": false,
+  "supported_architectures": ["amd64", "arm64"],
+  "form_fields": [
+    {
+      "type": "email",
+      "label": "Root User Email",
+      "env_variable": "ZO_ROOT_USER_EMAIL",
+      "required": true,
+      "hint": "Email for the initial admin account"
+    },
+    {
+      "type": "password",
+      "label": "Root User Password",
+      "env_variable": "ZO_ROOT_USER_PASSWORD",
+      "required": true,
+      "min": 8,
+      "hint": "Password for the initial admin account"
+    },
+    {
+      "type": "boolean",
+      "label": "Enable Telemetry",
+      "env_variable": "ZO_TELEMETRY",
+      "required": false,
+      "default": false,
+      "hint": "Send anonymous usage data to OpenObserve (default: off)"
+    }
+  ],
+  "dynamic_config": true,
+  "min_tipi_version": "v4.0.0",
+  "created_at": 1789187821288,
+  "updated_at": 1789187821288
+}
