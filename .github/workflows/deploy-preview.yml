@@ -255,7 +255,9 @@ jobs:
             PROD_URN="${APP_ID}:cmolina"
             PROD_STATUS=$(runtipi GET "/api/apps/$PROD_URN" 2>/dev/null | jq -r '.app.status // "missing"')
             if [ "$PROD_STATUS" = "missing" ]; then
-              echo "Skipping $APP_ID: no production app ($PROD_URN) to copy from"
+              echo "No production app ($PROD_URN) for $APP_ID; starting empty preview"
+              runtipi POST "/api/app-lifecycle/$URN/start" > /dev/null || true
+              wait_for_app_status "$URN" "running" 180 || echo "::warning::$APP_ID did not reach running (empty preview)"
               continue
             fi
             echo "Copying data from $PROD_URN to $URN"

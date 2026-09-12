@@ -30,9 +30,14 @@ def main():
             form[env] = str(f.get("default", False)).lower()
         elif f.get("default") is not None:
             form[env] = str(f["default"])
-        elif t in ("text", "password") and f.get("required"):
-            if "email" in env.lower() or "email" in f.get("label", "").lower():
+        elif t in ("text", "password", "email") and f.get("required"):
+            if t == "email" or "email" in env.lower() or "email" in f.get("label", "").lower():
                 form[env] = "preview@example.com"
+            elif t == "password":
+                # Some apps (e.g. OpenObserve) enforce password complexity
+                # (lowercase + uppercase + digit + special char). Generate a
+                # value that satisfies those rules so first-run doesn't panic.
+                form[env] = "Preview#123"
             else:
                 form[env] = "preview-value"
 
