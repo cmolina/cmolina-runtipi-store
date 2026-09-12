@@ -10,6 +10,7 @@ A curated collection of self-hosted applications for the [Runtipi](https://runti
 | <img src="apps/dawarich/metadata/logo.jpg" width="32" height="32"><br>**[Dawarich](https://github.com/Freika/dawarich)** | Self-hosted alternative to Google Location History — track, visualize, and control your location data on an interactive map |
 | <img src="apps/isponsorblocktv/metadata/logo.jpg" width="32" height="32"><br>**[iSponsorBlockTV](https://github.com/iSponsorBlockTV/iSponsorBlockTV)** | Automatically skip YouTube sponsors, intros, outros, and ads on Apple TV, Android TV, Roku, and more |
 | <img src="apps/libation/metadata/logo.jpg" width="32" height="32"><br>**[Libation](https://github.com/rmcrackan/Libation)** | Free, open-source Audible audiobook manager — download, remove DRM, and truly own your audiobooks |
+| <img src="apps/openobserve/metadata/logo.jpg" width="32" height="32"><br>**[OpenObserve](https://github.com/openobserve/openobserve)** | Unified observability platform for logs, metrics, traces, and RUM — Parquet storage at 140x lower cost than Elasticsearch |
 
 ## Repository Structure
 
