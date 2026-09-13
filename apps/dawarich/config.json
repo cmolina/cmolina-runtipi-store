@@ -7,8 +7,8 @@
   "port": 3030,
   "categories": ["utilities", "network"],
   "description": "Dawarich is a self-hosted alternative to Google Location History. Track your location history, visualize it on a map, and have complete control over your data.",
-  "tipi_version": 30,
-  "version": "1.14.0",
+  "tipi_version": 31,
+  "version": "1.14.4",
   "source": "https://github.com/Freika/dawarich",
   "website": "https://dawarich.app",
   "exposable": true,
@@ -54,10 +54,13 @@
     { "type": "text", "label": "SMTP Username", "env_variable": "SMTP_USERNAME", "required": false, "hint": "Your SMTP username" },
     { "type": "password", "label": "SMTP Password", "env_variable": "SMTP_PASSWORD", "required": false, "hint": "Your SMTP password" },
     { "type": "text", "label": "SMTP From", "env_variable": "SMTP_FROM", "required": false, "hint": "Email address to send emails from" },
-    { "type": "boolean", "label": "Skip Visits Fleet Re-Detection", "env_variable": "SKIP_VISITS_FLEET_REDETECT", "default": false, "required": false, "hint": "Opt out of the automatic visits re-detection that runs after migrating to 1.12.0. Enable only if you want to keep existing visit detection." }
+    { "type": "boolean", "label": "Skip Visits Fleet Re-Detection", "env_variable": "SKIP_VISITS_FLEET_REDETECT", "default": false, "required": false, "hint": "Opt out of the automatic visits re-detection that runs after migrating to 1.12.0. Enable only if you want to keep existing visit detection." },
+    { "type": "boolean", "label": "OIDC Discovery", "env_variable": "OIDC_DISCOVERY", "default": true, "required": false, "hint": "Use OIDC discovery (well-known config) from the issuer URL. Set to false for manual endpoint configuration (OIDC_HOST, OIDC_JWKS_URI, etc.)." },
+    { "type": "text", "label": "OIDC JWKS URI", "env_variable": "OIDC_JWKS_URI", "required": false, "hint": "Manual OIDC signing keys URL (JWKS), e.g. https://auth.example.com/api/oidc/jwks. Only used when OIDC discovery is disabled." },
+    { "type": "text", "label": "SMTP OpenSSL Verify Mode", "env_variable": "SMTP_OPENSSL_VERIFY_MODE", "required": false, "hint": "SMTP certificate verification: peer (default) or none (for local mail relays with self-signed certificates)." }
   ],
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
   "created_at": 1738700000000,
-  "updated_at": 1788052875631
+  "updated_at": 1789257555020
 }
