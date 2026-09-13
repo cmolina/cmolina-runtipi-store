@@ -45,31 +45,37 @@ git -C $REPO_DIR worktree add $REPO_DIR/all-apps-update -b $BRANCH origin/main
 
 All file edits for all apps happen inside this single worktree.
 
-### B2 — Iterate over each app
+### B2 — Delegate each app to a subagent
 
-For each app in `$APPS`, run **Steps 0 through 5** from the single-app flow (adapted):
-- **Step 0 variant**: read `config.json` from the worktree file (`$REPO_DIR/all-apps-update/apps/<app>/config.json`) instead of `git show origin/main:…` — the worktree already has the latest main. Still fetch the GitHub release (Step 1) to compare.
-- **Step 1**: fetch latest release, compare versions. If already up to date → skip this app (add to "already up to date" list, continue to next app).
-- **Steps 3–5b**: detect env vars, update `config.json` and `docker-compose.json`, and sync any `terminal/Dockerfile` base exactly as in single-app mode.
-- After updating each app's files, create a commit for that app only:
+For each app in `$APPS`, spawn **one subagent per app** (in parallel) that runs **Steps 0 through 5** from the single-app flow (adapted). Do NOT iterate inline — every app's update is an independent unit of work, so fan them out as parallel subagents.
+
+Each subagent receives:
+- The app name and its current version (read from `$REPO_DIR/all-apps-update/apps/<app>/config.json`).
+- The shared worktree path `$REPO_DIR/all-apps-update` where all edits happen.
+- Instructions to run the single-app flow adapted for bulk mode:
+  - **Step 0 variant**: read `config.json` from the worktree file (`$REPO_DIR/all-apps-update/apps/<app>/config.json`) instead of `git show origin/main:…` — the worktree already has the latest main. Still fetch the GitHub release (Step 1) to compare.
+  - **Step 1**: fetch latest release, compare versions. If already up to date → report "already up to date" and do nothing else.
+  - **Steps 3–5b**: detect env vars, update `config.json` and `docker-compose.json`, and sync any `terminal/Dockerfile` base exactly as in single-app mode.
+  - **Do NOT commit** — subagents edit files only. The orchestrator commits each app's changes centrally (see B3).
+
+Each subagent returns a summary: `{ app, old_version, new_version, new_env_vars[], release_notes }`, or `{ app, status: "already up to date" }`.
+
+**Parallelism note**: subagents edit different files under `apps/<app>/`, so they can run concurrently in the same worktree without conflict. Git commits are done centrally by the orchestrator (B3), never by the subagents — this avoids lock contention on the shared worktree's `.git`.
+
+If **no** apps needed an update after all subagents report → print "All apps already up to date" and stop without opening a PR.
+
+### B3 — Commit each app's changes, then run tests once
+
+After all subagents report, commit each updated app's files centrally (one commit per app), then run tests:
 
 ```bash
 cd $REPO_DIR/all-apps-update
+# For each app that reported an update:
 git add apps/<app>/config.json apps/<app>/docker-compose.json
 [ -f "apps/<app>/terminal/Dockerfile" ] && git add "apps/<app>/terminal/Dockerfile"
 git commit --no-gpg-sign -m "Update <AppName> to <new-version>"
-```
 
-Collect a summary for each processed app: `{ app, old_version, new_version, new_env_vars[], release_notes }`.
-
-If **no** apps needed an update after iterating all of them → print "All apps already up to date" and stop without opening a PR.
-
-### B3 — Run tests once
-
-After all apps are committed:
-
-```bash
-cd $REPO_DIR/all-apps-update && bun install && bun run test
+bun install && bun run test
 ```
 
 If tests fail: read the error, fix the issue, re-run. Do NOT proceed until all tests pass.
