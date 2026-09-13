@@ -53,7 +53,7 @@
     },
     {
       "name": "dawarich_app",
-      "image": "freikin/dawarich:1.14.0",
+      "image": "freikin/dawarich:1.14.4",
       "isMain": true,
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
@@ -119,6 +119,8 @@
         { "key": "OIDC_PROVIDER_NAME", "value": "${OIDC_PROVIDER_NAME}" },
         { "key": "OIDC_AUTO_REGISTER", "value": "${OIDC_AUTO_REGISTER}" },
         { "key": "OIDC_PKCE_ENABLED", "value": "${OIDC_PKCE_ENABLED}" },
+        { "key": "OIDC_DISCOVERY", "value": "${OIDC_DISCOVERY}" },
+        { "key": "OIDC_JWKS_URI", "value": "${OIDC_JWKS_URI}" },
         { "key": "ALLOW_EMAIL_PASSWORD_REGISTRATION", "value": "${ALLOW_EMAIL_PASSWORD_REGISTRATION}" },
         { "key": "ALLOW_EMAIL_PASSWORD_LOGIN", "value": "${ALLOW_EMAIL_PASSWORD_LOGIN}" },
         { "key": "METRICS_USERNAME", "value": "${METRICS_USERNAME}" },
@@ -126,6 +128,7 @@
         { "key": "SMTP_AUTHENTICATION", "value": "${SMTP_AUTHENTICATION}" },
         { "key": "SMTP_OPEN_TIMEOUT", "value": "${SMTP_OPEN_TIMEOUT}" },
         { "key": "SMTP_READ_TIMEOUT", "value": "${SMTP_READ_TIMEOUT}" },
+        { "key": "SMTP_OPENSSL_VERIFY_MODE", "value": "${SMTP_OPENSSL_VERIFY_MODE}" },
         { "key": "DOMAIN", "value": "${DOMAIN}" },
         { "key": "DISTANCE_UNIT", "value": "${DISTANCE_UNIT}" },
         { "key": "SMTP_SERVER", "value": "${SMTP_SERVER}" },
@@ -167,7 +170,7 @@
     },
     {
       "name": "dawarich_sidekiq",
-      "image": "freikin/dawarich:1.14.0",
+      "image": "freikin/dawarich:1.14.4",
       "isMain": false,
       "entrypoint": "sidekiq-entrypoint.sh",
       "volumes": [
