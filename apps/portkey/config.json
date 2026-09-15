@@ -1,0 +1,22 @@
+{
+  "name": "Portkey AI Gateway",
+  "id": "portkey",
+  "available": true,
+  "short_desc": "Open-source AI gateway for routing to 250+ LLMs with observability, caching, and rate limiting",
+  "author": "Portkey AI",
+  "port": 8787,
+  "categories": ["ai", "development"],
+  "description": "Portkey AI Gateway is a lightweight, open-source proxy that routes requests to 250+ LLMs (OpenAI, Anthropic, Gemini, and more) through a single OpenAI-compatible API. It adds production-grade features on top of any provider: request routing and failover, caching, rate limiting, retries, load balancing, and full observability with logs and analytics.",
+  "tipi_version": 1,
+  "version": "v1.15.2",
+  "source": "https://github.com/Portkey-AI/gateway",
+  "website": "https://portkey.ai",
+  "exposable": true,
+  "force_expose": false,
+  "supported_architectures": ["amd64", "arm64"],
+  "form_fields": [],
+  "dynamic_config": true,
+  "min_tipi_version": "v4.0.0",
+  "created_at": 1757898000000,
+  "updated_at": 1757898000000
+}

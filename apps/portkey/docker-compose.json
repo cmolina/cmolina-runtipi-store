@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 2,
+  "services": [
+    {
+      "name": "portkey",
+      "image": "portkeyai/gateway:1.15.2",
+      "isMain": true,
+      "internalPort": 8787,
+      "environment": [
+        { "key": "PORT", "value": "8787" }
+      ],
+      "restart": "unless-stopped"
+    }
+  ]
+}
