@@ -10,11 +10,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      deployments: write
       packages: write
       contents: read
     env:
-      RUNTIPI_URL: ${{ secrets.RUNTIPI_URL }}
+      PREVIEW_WORKER_URL: ${{ secrets.PREVIEW_WORKER_URL }}
       CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
       CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
 
@@ -33,92 +32,18 @@ jobs:
       - name: Validate secrets
         if: steps.apps.outputs.list != ''
         env:
-          RUNTIPI_ADMIN: ${{ secrets.RUNTIPI_ADMIN }}
-          RUNTIPI_PASSWORD: ${{ secrets.RUNTIPI_PASSWORD }}
-          RUNTIPI_TOTP_SECRET: ${{ secrets.RUNTIPI_TOTP_SECRET }}
+          PREVIEW_WORKER_URL: ${{ secrets.PREVIEW_WORKER_URL }}
+          CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
         run: |
           missing=()
-          [ -z "$RUNTIPI_URL" ]        && missing+=(RUNTIPI_URL)
+          [ -z "$PREVIEW_WORKER_URL" ] && missing+=(PREVIEW_WORKER_URL)
           [ -z "$CF_CLIENT_ID" ]       && missing+=(CF_CLIENT_ID)
           [ -z "$CF_CLIENT_SECRET" ]   && missing+=(CF_CLIENT_SECRET)
-          [ -z "$RUNTIPI_ADMIN" ]      && missing+=(RUNTIPI_ADMIN)
-          [ -z "$RUNTIPI_PASSWORD" ]   && missing+=(RUNTIPI_PASSWORD)
-          [ -z "$RUNTIPI_TOTP_SECRET" ] && missing+=(RUNTIPI_TOTP_SECRET)
           if [ ${#missing[@]} -gt 0 ]; then
             echo "::error::Missing required secrets: ${missing[*]}"
             exit 1
           fi
-
-      - name: Setup and authenticate
-        if: steps.apps.outputs.list != ''
-        uses: ./.github/actions/runtipi-auth
-        with:
-          runtipi_url: ${{ secrets.RUNTIPI_URL }}
-          cf_client_id: ${{ secrets.CF_CLIENT_ID }}
-          cf_client_secret: ${{ secrets.CF_CLIENT_SECRET }}
-          runtipi_admin: ${{ secrets.RUNTIPI_ADMIN }}
-          runtipi_password: ${{ secrets.RUNTIPI_PASSWORD }}
-          runtipi_totp_secret: ${{ secrets.RUNTIPI_TOTP_SECRET }}
-
-      - name: Create and sync preview store
-        if: steps.apps.outputs.list != ''
-        run: |
-          source /tmp/runtipi.sh
-          STORE="pr-${{ github.event.number }}"
-          BRANCH_URL="https://github.com/${{ github.repository }}/tree/${{ github.head_ref }}"
-          CREATE_BODY=$(jq -n --arg name "$STORE" --arg url "$BRANCH_URL" '{name: $name, url: $url}')
-          runtipi POST /api/marketplace/create -d "$CREATE_BODY" > /dev/null || true
-          runtipi POST /api/marketplace/pull > /dev/null
-
-      - name: Clean up stale preview stores
-        if: steps.apps.outputs.list != ''
-        run: |
-          source /tmp/runtipi.sh
-          STORE="pr-${{ github.event.number }}"
-          for URN in $(installed_urns); do
-            case "$URN" in
-              *":$STORE") continue ;;
-              *:pr-*)
-                echo "Uninstalling stale preview app $URN"
-                runtipi DELETE "/api/app-lifecycle/$URN/uninstall" -d '{"removeBackups":true}' > /dev/null || true
-                wait_for_app_status "$URN" "missing" 120 || true
-                ;;
-            esac
-          done
-
-      - name: Set random APP_PORT via user-config appEnv (avoid conflicts with production)
-        if: steps.apps.outputs.list != ''
-        run: |
-          source /tmp/runtipi.sh
-          STORE="pr-${{ github.event.number }}"
-          # Persist chosen ports so the data-copy step can re-apply them after
-          # restoring a backup (restore replaces user-config with production's).
-          : > /tmp/app_ports.tsv
-          for APP_ID in ${{ steps.apps.outputs.list }}; do
-            CONFIG="apps/$APP_ID/config.json"
-            COMPOSE="apps/$APP_ID/docker-compose.json"
-            # Skip apps that don't expose a port (headless/internal services)
-            PORT=$(jq -r '.port // empty' "$CONFIG" 2>/dev/null)
-            NETWORK_MODE=$(jq -r '[.services[] | .networkMode // empty] | first' "$COMPOSE" 2>/dev/null)
-            HAS_PORT_MAPPING=$(jq -r '[.services[] | select(.internalPort != null or .exposePort != null)] | length > 0' "$COMPOSE" 2>/dev/null)
-            if [ -z "$PORT" ] && [ "$HAS_PORT_MAPPING" = "false" ]; then
-              echo "Skipping $APP_ID: no port mapping needed"
-              continue
-            fi
-            if [ "$NETWORK_MODE" = "host" ]; then
-              echo "Skipping $APP_ID: uses host networking (no port mapping)"
-              continue
-            fi
-            # Only set APP_PORT if config.json has a port field (apps with port get mapped)
-            if [ -n "$PORT" ]; then
-              RP=$(shuf -i 10000-65534 -n 1)
-              URN="${APP_ID}:${STORE}"
-              BODY=$(jq -n --argjson rp "$RP" '{dockerCompose: "", appEnv: ("APP_PORT=\($rp)")}')
-              runtipi PUT "/api/user-config/$URN" -d "$BODY" > /dev/null
-              echo "$APP_ID $RP" >> /tmp/app_ports.tsv
-              echo "Set APP_PORT=$RP for $URN (was default $PORT)"
-            fi
-          done
 
       - name: Set up QEMU (multi-arch builds)
         if: steps.apps.outputs.list != ''
@@ -157,297 +82,23 @@ jobs:
           done
           [ "$BUILT" = "1" ] || echo "No derived images to build"
 
-      - name: Install apps
+      - name: Enqueue preview job with worker
         if: steps.apps.outputs.list != ''
-        id: install
+        id: enqueue
         run: |
-          source /tmp/runtipi.sh
-          STORE="pr-${{ github.event.number }}"
-          SUCCESS_APPS=""
-          STOPPED_APPS=""
-          FAILED_APPS=""
-          for APP_ID in ${{ steps.apps.outputs.list }}; do
-            CONFIG="apps/$APP_ID/config.json"
-            [ -f "$CONFIG" ] || continue
-            URN="${APP_ID}:${STORE}"
-            runtipi DELETE "/api/app-lifecycle/$URN/uninstall" -d '{"removeBackups":true}' > /dev/null || true
-            wait_for_app_status "$URN" "missing" 60 || true
-            FORM=$(STORE="$STORE" python3 /tmp/gen_form.py "$CONFIG")
-            # Reuse production credential values when the app is installed in
-            # the cmolina store so the preview can read data copied from it
-            # (random values would mismatch the restored database).
-            PROD_URN="${APP_ID}:cmolina"
-            PROD_STATUS=$(runtipi GET "/api/apps/$PROD_URN" 2>/dev/null | jq -r '.app.status // "missing"')
-            if [ "$PROD_STATUS" != "missing" ]; then
-              PROD_CONFIG=$(runtipi GET "/api/apps/$PROD_URN" 2>/dev/null | jq -c '.app.config // {}')
-              for ENV in $(jq -r '.form_fields[].env_variable' "$CONFIG"); do
-                VAL=$(echo "$PROD_CONFIG" | jq -r --arg k "$ENV" '.[$k] // empty')
-                [ -n "$VAL" ] && FORM=$(echo "$FORM" | jq -c --arg k "$ENV" --arg v "$VAL" '.[$k] = $v')
-              done
-            fi
-            rm -f /tmp/install_resp.json
-            runtipi POST "/api/app-lifecycle/$URN/install" -d "$FORM" > /tmp/install_resp.json
-            INSTALL_CODE=$RUNTIPI_HTTP_CODE
-            RESP=$(cat /tmp/install_resp.json)
-            case "$INSTALL_CODE" in
-              2*) ;;
-              *)
-                # Retry once: store DB record can vanish after a host restart (root cause of the 2026-08-14 500s)
-                if echo "$RESP" | grep -q "not found"; then
-                  echo "::warning::$APP_ID store missing (HTTP $INSTALL_CODE); recreating store $STORE and retrying once"
-                  BRANCH_URL="https://github.com/${{ github.repository }}/tree/${{ github.head_ref }}"
-                  CREATE_BODY=$(jq -n --arg name "$STORE" --arg url "$BRANCH_URL" '{name: $name, url: $url}')
-                  runtipi POST /api/marketplace/create -d "$CREATE_BODY" > /dev/null || true
-                  runtipi POST /api/marketplace/pull > /dev/null
-                  runtipi POST "/api/app-lifecycle/$URN/install" -d "$FORM" > /tmp/install_resp.json
-                  INSTALL_CODE=$RUNTIPI_HTTP_CODE
-                  RESP=$(cat /tmp/install_resp.json)
-                fi
-                case "$INSTALL_CODE" in
-                  2*) ;;
-                  *)
-                    echo "::error::$APP_ID install rejected: HTTP $INSTALL_CODE $RESP"
-                    FAILED_APPS="$FAILED_APPS $APP_ID"
-                    dump_app_logs "$URN"
-                    continue
-                    ;;
-                esac
-                ;;
-            esac
-            if wait_for_app_terminal "$URN" 600 300; then
-              SUCCESS_APPS="$SUCCESS_APPS $APP_ID"
-            else
-              # wait_for_app_terminal: 0=running, 1=terminal stopped/missing,
-              # 2=never reached a terminal state. Return 1 is a normal first-run
-              # state for data-awaiting apps (e.g. iSponsorBlockTV exits because
-              # no device is configured yet) - send those to the copy step so the
-              # prod data (the configured devices) is restored before judging them.
-              # Only a genuine timeout (2) or an install rejection is a hard failure.
-              rc=$?
-              if [ "$rc" -eq 1 ]; then
-                echo "::warning::$APP_ID reached stopped (awaiting data restore); will restore then re-check"
-                STOPPED_APPS="$STOPPED_APPS $APP_ID"
-              else
-                echo "::error::$APP_ID install did not reach running"
-                FAILED_APPS="$FAILED_APPS $APP_ID"
-                dump_app_logs "$URN"
-              fi
-            fi
-          done
-          echo "success_apps=${SUCCESS_APPS# }" >> "$GITHUB_OUTPUT"
-          echo "stopped_apps=${STOPPED_APPS# }" >> "$GITHUB_OUTPUT"
-          echo "failed_apps=${FAILED_APPS# }" >> "$GITHUB_OUTPUT"
-
-      - name: Copy production data to previews
-        if: steps.apps.outputs.list != ''
-        id: copy
-        run: |
-          source /tmp/runtipi.sh
-          STORE="pr-${{ github.event.number }}"
-          COPY_FAILED=""
-          # Restore prod data for apps that reached running AND apps that reached
-          # a terminal stopped state (data-awaiting apps like iSponsorBlockTV): a
-          # stopped app only needs its configured data to start, and the restore
-          # carries it. Only genuine install failures/timeouts are excluded.
-          RESTORE_APPS="${{ steps.install.outputs.success_apps }} ${{ steps.install.outputs.stopped_apps }}"
-          for APP_ID in $(echo "$RESTORE_APPS" | tr ' ' '\n' | grep -v '^$' | sort -u); do
-            URN="${APP_ID}:${STORE}"
-            PROD_URN="${APP_ID}:cmolina"
-            PROD_STATUS=$(runtipi GET "/api/apps/$PROD_URN" 2>/dev/null | jq -r '.app.status // "missing"')
-            if [ "$PROD_STATUS" = "missing" ]; then
-              echo "No production app ($PROD_URN) for $APP_ID; starting empty preview"
-              runtipi POST "/api/app-lifecycle/$URN/start" > /dev/null || true
-              wait_for_app_status "$URN" "running" 180 || echo "::warning::$APP_ID did not reach running (empty preview)"
-              continue
-            fi
-            echo "Copying data from $PROD_URN to $URN"
-            # Stop the preview so restore leaves it stopped and we can re-apply
-            # the preview APP_PORT before starting (restore replaces user-config
-            # with production's). Skip the stop for apps already in a terminal
-            # stopped/missing state - data-awaiting apps reach restore that way.
-            PREVIEW_STATUS=$(runtipi GET "/api/apps/$URN" 2>/dev/null | jq -r '.app.status // "missing"')
-            if [ "$PREVIEW_STATUS" != "stopped" ] && [ "$PREVIEW_STATUS" != "missing" ]; then
-              runtipi POST "/api/app-lifecycle/$URN/stop" > /dev/null
-              wait_for_app_status "$URN" "stopped" 120 || echo "warn: $URN did not stop cleanly"
-            fi
-            # Snapshot the production app (briefly stops it; runtipi restarts it)
-            BEFORE=$(runtipi GET "/api/backups/$PROD_URN?page=1&pageSize=1" 2>/dev/null | jq -r '.data[0].id // "none"')
-            runtipi POST "/api/backups/$PROD_URN/backup" > /dev/null
-            # The backup runs asynchronously on runtipi's shared app-events queue
-            # (workers: 3, jobs may be backlogged), so poll for up to 600s. Bail
-            # early if the prod app drops from running to stopped: the backup job
-            # failed server-side (emitError leaves status stopped).
-            FILENAME=""
-            for i in $(seq 1 120); do
-              sleep 5
-              NOW=$(runtipi GET "/api/backups/$PROD_URN?page=1&pageSize=1" 2>/dev/null | jq -r '.data[0].id // "none"')
-              if [ -n "$NOW" ] && [ "$NOW" != "$BEFORE" ]; then FILENAME="$NOW"; break; fi
-              PSTATUS=$(runtipi GET "/api/apps/$PROD_URN" 2>/dev/null | jq -r '.app.status // "missing"')
-              if [ "$PSTATUS" = "stopped" ] && [ "$PROD_STATUS" = "running" ]; then
-                echo "::warning::$APP_ID prod app dropped to stopped during backup wait (backup job likely failed)"
-                break
-              fi
-              [ "$PSTATUS" = "missing" ] && break
-            done
-            if [ -z "$FILENAME" ]; then
-              echo "::error::$APP_ID backup did not appear within 600s; deploying empty preview"
-              COPY_FAILED="$COPY_FAILED $APP_ID"
-              runtipi POST "/api/app-lifecycle/$URN/start" > /dev/null || true
-              wait_for_app_status "$URN" "running" 120 || true
-              continue
-            fi
-            # Transfer the backup from the production store to the preview store
-            # NOTE: runtipi's AuthGuard rejects session-auth unsafe methods (POST/PUT/...)
-            # without a matching Origin/Referer header, so mirror runtipi()'s Origin header.
-            if ! curl -fsSL -b /tmp/jar -c /tmp/jar \
-              -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
-              -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
-              -H "Origin: $RUNTIPI_URL" \
-              -o "/tmp/$FILENAME" \
-              "$RUNTIPI_URL/api/backups/$PROD_URN/$FILENAME/download" || ! gzip -t "/tmp/$FILENAME"; then
-              echo "::error::$APP_ID backup download failed; deploying empty preview"
-              rm -f "/tmp/$FILENAME"
-              COPY_FAILED="$COPY_FAILED $APP_ID"
-              runtipi POST "/api/app-lifecycle/$URN/start" > /dev/null || true
-              wait_for_app_status "$URN" "running" 120 || true
-              continue
-            fi
-            if ! curl -fsSL -b /tmp/jar -c /tmp/jar \
-              -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
-              -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
-              -H "Origin: $RUNTIPI_URL" \
-              -F "file=@/tmp/$FILENAME;filename=$FILENAME" \
-              "$RUNTIPI_URL/api/backups/$URN/upload" > /dev/null; then
-              echo "::error::$APP_ID backup upload failed; deploying empty preview"
-              rm -f "/tmp/$FILENAME"
-              COPY_FAILED="$COPY_FAILED $APP_ID"
-              runtipi POST "/api/app-lifecycle/$URN/start" > /dev/null || true
-              wait_for_app_status "$URN" "running" 120 || true
-              continue
-            fi
-            rm -f "/tmp/$FILENAME"
-            # Restore the backup onto the preview app
-            runtipi POST "/api/backups/$URN/restore" -d "$(jq -n --arg f "$FILENAME" '{filename: $f}')" > /dev/null
-            STATUS=""
-            for i in $(seq 1 60); do
-              sleep 5
-              STATUS=$(runtipi GET "/api/apps/$URN" 2>/dev/null | jq -r '.app.status // "missing"')
-              [ "$STATUS" != "restoring" ] && break
-            done
-            if [ "$STATUS" != "stopped" ]; then
-              echo "::warning::$APP_ID restore did not finish cleanly (status=$STATUS)"
-              COPY_FAILED="$COPY_FAILED $APP_ID"
-            fi
-            # Re-apply the random APP_PORT chosen for this preview
-            RP=$(awk -v a="$APP_ID" '$1==a {print $2}' /tmp/app_ports.tsv)
-            if [ -n "$RP" ]; then
-              BODY=$(jq -n --argjson rp "$RP" '{dockerCompose: "", appEnv: ("APP_PORT=\($rp)")}')
-              runtipi PUT "/api/user-config/$URN" -d "$BODY" > /dev/null
-              echo "Re-applied APP_PORT=$RP for $URN"
-            fi
-            # Start the preview against the restored data (env is regenerated
-            # from the stored config, which reuses production credentials)
-            runtipi POST "/api/app-lifecycle/$URN/start" > /dev/null
-            if ! wait_for_app_status "$URN" "running" 180; then
-              echo "::error::$APP_ID did not reach running after data restore"
-              COPY_FAILED="$COPY_FAILED $APP_ID"
-            fi
-          done
-          echo "copy_failed_apps=${COPY_FAILED# }" >> "$GITHUB_OUTPUT"
-
-      - name: Verify previews return HTTP 2xx
-        if: steps.apps.outputs.list != ''
-        id: health
-        run: |
-          source /tmp/runtipi.sh
-          STORE="pr-${{ github.event.number }}"
-          HEALTHY_APPS=""
-          COPY_FAILED="${{ steps.copy.outputs.copy_failed_apps }}"
-          FAILED_APPS="${{ steps.install.outputs.failed_apps }} $COPY_FAILED"
-          # Verify every app we expect to be running: apps that reached running
-          # plus stopped apps that were restored with prod data. Skip any app
-          # already failed during install/copy.
-          CHECK_APPS="${{ steps.install.outputs.success_apps }} ${{ steps.install.outputs.stopped_apps }}"
-          for APP_ID in $(echo "$CHECK_APPS" | tr ' ' '\n' | grep -v '^$' | sort -u); do
-            if echo "$FAILED_APPS" | grep -qw "$APP_ID"; then
-              echo "Skipping HTTP check for $APP_ID: already failed (install/copy)"
-              continue
-            fi
-            CONFIG="apps/$APP_ID/config.json"
-            PORT=$(jq -r '.port // empty' "$CONFIG" 2>/dev/null)
-            if [ -z "$PORT" ]; then
-              echo "Skipping HTTP check for $APP_ID: no public port"
-              HEALTHY_APPS="$HEALTHY_APPS $APP_ID"
-              continue
-            fi
-            URL="https://${APP_ID}-${STORE}-preview.cmolina.cl"
-            if wait_for_http_2xx "$URL" 300; then
-              echo "OK: $APP_ID -> $URL"
-              HEALTHY_APPS="$HEALTHY_APPS $APP_ID"
-            else
-              echo "::error::$APP_ID never returned HTTP 2xx at $URL"
-              FAILED_APPS="$FAILED_APPS $APP_ID"
-            fi
-          done
-          echo "success_apps=${HEALTHY_APPS# }" >> "$GITHUB_OUTPUT"
-          echo "failed_apps=${FAILED_APPS# }" >> "$GITHUB_OUTPUT"
-
-      - name: Dump logs for failed preview apps
-        if: steps.health.outputs.failed_apps != ''
-        run: |
-          source /tmp/runtipi.sh
-          STORE="pr-${{ github.event.number }}"
-          for APP_ID in ${{ steps.health.outputs.failed_apps }}; do
-            URN="${APP_ID}:${STORE}"
-            echo "===== container logs for $URN ====="
-            curl -sN --max-time 15 \
-              -b /tmp/jar -c /tmp/jar \
-              -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
-              -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
-              "$RUNTIPI_URL/api/sse/app-logs?appUrn=${URN}&maxLines=200" \
-              | sed -n 's/^data: //p' \
-              | jq -r 'select(.event == "newLogs") | .lines[]?' \
-              | sed 's/<[^>]*>//g' \
-              || true
-          done
-
-      - name: Create GitHub deployments
-        if: steps.apps.outputs.list != ''
-        uses: actions/github-script@v7
-        env:
-          SUCCESS_APPS: ${{ steps.health.outputs.success_apps }}
-          FAILED_APPS: ${{ steps.health.outputs.failed_apps }}
-        with:
-          script: |
-            const ref = context.payload.pull_request.head.ref;
-            const storeSuffix = `pr-${context.payload.pull_request.number}`;
-            const successApps = (process.env.SUCCESS_APPS || '').trim().split(/\s+/).filter(Boolean);
-            const failedApps  = (process.env.FAILED_APPS  || '').trim().split(/\s+/).filter(Boolean);
-            const deploy = async (appId, state) => {
-              const { data: dep } = await github.rest.repos.createDeployment({
-                ...context.repo,
-                ref,
-                environment: `preview/${appId}`,
-                auto_merge: false,
-                required_contexts: [],
-                transient_environment: true,
-                production_environment: false,
-              });
-              await github.rest.repos.createDeploymentStatus({
-                ...context.repo,
-                deployment_id: dep.id,
-                state,
-                ...(state === 'success' && {
-                  environment_url: `https://${appId}-${storeSuffix}-preview.cmolina.cl`,
-                }),
-                log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              });
-            };
-            for (const appId of successApps) await deploy(appId, 'success');
-            for (const appId of failedApps)  await deploy(appId, 'failure');
-
-      - name: Fail job if any app failed to deploy
-        if: steps.apps.outputs.list != '' && steps.health.outputs.failed_apps != ''
-        run: |
-          echo "::error::Failed to deploy apps: ${{ steps.health.outputs.failed_apps }}"
-          exit 1
+          # The worker (running on the Runtipi host) installs each app into the
+          # pr-<number> store, copies production data directly from disk, starts
+          # it, verifies HTTP 2xx, and sets GitHub deployment statuses itself.
+          # We only enqueue here; Cloudflare Access gates the endpoint.
+          BODY=$(jq -n \
+            --argjson pr "${{ github.event.number }}" \
+            --arg ref "${{ github.head_ref }}" \
+            --arg apps "${{ steps.apps.outputs.list }}" \
+            '{prNumber: $pr, ref: $ref, apps: ($apps | split(" ") | map(select(. != "")))}')
+          RESP=$(curl -fsSL \
+            -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "$BODY" \
+            "$PREVIEW_WORKER_URL/preview")
+          echo "Worker response: $RESP"
