@@ -10,7 +10,7 @@ jobs:
     permissions:
       deployments: write
     env:
-      RUNTIPI_URL: ${{ secrets.RUNTIPI_URL }}
+      PREVIEW_WORKER_URL: ${{ secrets.PREVIEW_WORKER_URL }}
       CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
       CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
 
@@ -27,63 +27,29 @@ jobs:
 
       - name: Validate secrets
         env:
-          RUNTIPI_ADMIN: ${{ secrets.RUNTIPI_ADMIN }}
-          RUNTIPI_PASSWORD: ${{ secrets.RUNTIPI_PASSWORD }}
-          RUNTIPI_TOTP_SECRET: ${{ secrets.RUNTIPI_TOTP_SECRET }}
+          PREVIEW_WORKER_URL: ${{ secrets.PREVIEW_WORKER_URL }}
+          CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
         run: |
           missing=()
-          [ -z "$RUNTIPI_URL" ]        && missing+=(RUNTIPI_URL)
+          [ -z "$PREVIEW_WORKER_URL" ] && missing+=(PREVIEW_WORKER_URL)
           [ -z "$CF_CLIENT_ID" ]       && missing+=(CF_CLIENT_ID)
           [ -z "$CF_CLIENT_SECRET" ]   && missing+=(CF_CLIENT_SECRET)
-          [ -z "$RUNTIPI_ADMIN" ]      && missing+=(RUNTIPI_ADMIN)
-          [ -z "$RUNTIPI_PASSWORD" ]   && missing+=(RUNTIPI_PASSWORD)
-          [ -z "$RUNTIPI_TOTP_SECRET" ] && missing+=(RUNTIPI_TOTP_SECRET)
           if [ ${#missing[@]} -gt 0 ]; then
             echo "::error::Missing required secrets: ${missing[*]}"
             exit 1
           fi
 
-      - name: Setup and authenticate
-        uses: ./.github/actions/runtipi-auth
-        with:
-          runtipi_url: ${{ secrets.RUNTIPI_URL }}
-          cf_client_id: ${{ secrets.CF_CLIENT_ID }}
-          cf_client_secret: ${{ secrets.CF_CLIENT_SECRET }}
-          runtipi_admin: ${{ secrets.RUNTIPI_ADMIN }}
-          runtipi_password: ${{ secrets.RUNTIPI_PASSWORD }}
-          runtipi_totp_secret: ${{ secrets.RUNTIPI_TOTP_SECRET }}
-
-      - name: Uninstall all apps from the preview store and remove it
+      - name: Uninstall preview apps and remove store via worker
         run: |
-          source /tmp/runtipi.sh
-          STORE="pr-${{ github.event.number }}"
-          APPS="${{ steps.apps.outputs.list }}"
-
-          if [ -n "$APPS" ]; then
-            echo "Uninstalling apps from $STORE: $APPS"
-            for APP_ID in $APPS; do
-              runtipi DELETE "/api/app-lifecycle/${APP_ID}:${STORE}/uninstall" -d '{"removeBackups":true}' > /dev/null || true
-            done
-            for APP_ID in $APPS; do
-              wait_for_app_status "${APP_ID}:${STORE}" "missing" 120 || true
-            done
-          else
-            echo "No apps to uninstall"
-          fi
-
-          echo "Removing store $STORE"
-          runtipi GET /api/marketplace/all > /tmp/runtipi_stores
-          STORE_ID=$(jq -r --arg target "$STORE" '
-            (if type == "object" then .data // .appStores // [] else . end) // []
-            | map(select(.slug == $target or .name == $target))
-            | first | .id // .slug // ""
-          ' /tmp/runtipi_stores 2>/dev/null)
-          if [ -n "$STORE_ID" ]; then
-            runtipi DELETE "/api/marketplace/$STORE_ID" > /dev/null
-            echo "Removed store $STORE (id=$STORE_ID)"
-          else
-            echo "Store $STORE not found, skipping"
-          fi
+          # The worker uninstalls every app in the pr-<number> store, removes the
+          # store, and cleans up docker leftovers + on-disk dirs. Cloudflare
+          # Access gates the endpoint.
+          curl -fsSL \
+            -X DELETE \
+            -H "CF-Access-Client-Id: $CF_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_CLIENT_SECRET" \
+            "$PREVIEW_WORKER_URL/preview/${{ github.event.number }}"
 
       - name: Mark deployments inactive
         env:
