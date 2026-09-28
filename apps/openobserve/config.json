@@ -7,8 +7,8 @@
   "port": 5080,
   "categories": ["data", "utilities"],
   "description": "OpenObserve is a cloud-native observability platform built in Rust for logs, metrics, traces, dashboards, alerts, and real user monitoring. It stores data in Parquet columnar format for up to 140x lower storage cost than Elasticsearch, with a single binary that runs on embedded SQLite — no separate database required.",
-  "tipi_version": 1,
-  "version": "v1.0.0",
+  "tipi_version": 2,
+  "version": "v1.0.4",
   "source": "https://github.com/openobserve/openobserve",
   "website": "https://openobserve.ai",
   "exposable": true,
@@ -42,5 +42,5 @@
   "dynamic_config": true,
   "min_tipi_version": "v4.0.0",
   "created_at": 1789187821288,
-  "updated_at": 1789187821288
+  "updated_at": 1790628803115
 }
