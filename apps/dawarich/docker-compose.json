@@ -53,7 +53,7 @@
     },
     {
       "name": "dawarich_app",
-      "image": "freikin/dawarich:1.15.2",
+      "image": "freikin/dawarich:1.15.3",
       "isMain": true,
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
@@ -129,6 +129,7 @@
         { "key": "SMTP_OPEN_TIMEOUT", "value": "${SMTP_OPEN_TIMEOUT}" },
         { "key": "SMTP_READ_TIMEOUT", "value": "${SMTP_READ_TIMEOUT}" },
         { "key": "SMTP_OPENSSL_VERIFY_MODE", "value": "${SMTP_OPENSSL_VERIFY_MODE}" },
+        { "key": "PRINT_ORDER_URL", "value": "${PRINT_ORDER_URL}" },
         { "key": "DOMAIN", "value": "${DOMAIN}" },
         { "key": "DISTANCE_UNIT", "value": "${DISTANCE_UNIT}" },
         { "key": "SMTP_SERVER", "value": "${SMTP_SERVER}" },
@@ -170,7 +171,7 @@
     },
     {
       "name": "dawarich_sidekiq",
-      "image": "freikin/dawarich:1.15.2",
+      "image": "freikin/dawarich:1.15.3",
       "isMain": false,
       "entrypoint": "sidekiq-entrypoint.sh",
       "volumes": [
