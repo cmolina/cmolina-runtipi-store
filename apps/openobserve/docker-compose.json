@@ -3,7 +3,7 @@
   "services": [
     {
       "name": "openobserve",
-      "image": "openobserve/openobserve:v1.0.4",
+      "image": "openobserve/openobserve:v1.1.2",
       "isMain": true,
       "internalPort": 5080,
       "volumes": [
