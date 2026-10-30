@@ -53,7 +53,7 @@
     },
     {
       "name": "dawarich_app",
-      "image": "freikin/dawarich:1.16.0",
+      "image": "freikin/dawarich:1.19.0",
       "isMain": true,
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
@@ -79,6 +79,7 @@
       "stdinOpen": true,
       "tty": true,
       "restart": "on-failure",
+      "stopGracePeriod": "60s",
       "environment": [
         { "key": "RAILS_ENV", "value": "production" },
         { "key": "PUID", "value": "${PUID}" },
@@ -94,7 +95,8 @@
         { "key": "APPLICATION_PROTOCOL", "value": "http" },
         { "key": "PROMETHEUS_EXPORTER_ENABLED", "value": "false" },
         { "key": "PROMETHEUS_EXPORTER_PORT", "value": "9394" },
-        { "key": "SIDEKIQ_METRICS_URL", "value": "http://dawarich_sidekiq:9394/metrics" },
+        { "key": "SIDEKIQ_EMBEDDED", "value": "true" },
+        { "key": "BACKGROUND_PROCESSING_CONCURRENCY", "value": "2" },
         { "key": "SECRET_KEY_BASE", "value": "${SECRET_KEY_BASE}" },
         { "key": "OTP_ENCRYPTION_PRIMARY_KEY", "value": "${OTP_ENCRYPTION_PRIMARY_KEY}" },
         { "key": "OTP_ENCRYPTION_DETERMINISTIC_KEY", "value": "${OTP_ENCRYPTION_DETERMINISTIC_KEY}" },
@@ -139,7 +141,7 @@
         { "key": "SKIP_VISITS_FLEET_REDETECT", "value": "${SKIP_VISITS_FLEET_REDETECT}" },
         { "key": "VIDEO_RETENTION_DAYS", "value": "30" },
         { "key": "VIDEO_MAX_PER_USER", "value": "10" },
-        { "key": "WEB_CONCURRENCY", "value": "1" }
+        { "key": "WEB_CONCURRENCY", "value": "0" }
       ],
       "logging": {
         "driver": "json-file",
@@ -166,81 +168,6 @@
             "memory": "4G"
           }
         }
-      }
-    },
-    {
-      "name": "dawarich_sidekiq",
-      "image": "freikin/dawarich:1.16.0",
-      "isMain": false,
-      "entrypoint": "sidekiq-entrypoint.sh",
-      "volumes": [
-        {
-          "hostPath": "${APP_DATA_DIR}/data/public",
-          "containerPath": "/var/app/public"
-        },
-        {
-          "hostPath": "${APP_DATA_DIR}/data/watched",
-          "containerPath": "/var/app/tmp/imports/watched"
-        },
-        {
-          "hostPath": "${APP_DATA_DIR}/data/storage",
-          "containerPath": "/var/app/storage"
-        }
-      ],
-      "command": ["sidekiq"],
-      "stdinOpen": true,
-      "tty": true,
-      "restart": "on-failure",
-      "environment": [
-        { "key": "RAILS_ENV", "value": "production" },
-        { "key": "PUID", "value": "${PUID}" },
-        { "key": "PGID", "value": "${PGID}" },
-        { "key": "REDIS_URL", "value": "redis://dawarich_redis:6379" },
-        { "key": "DATABASE_HOST", "value": "dawarich_db" },
-        { "key": "DATABASE_PORT", "value": "5432" },
-        { "key": "DATABASE_USERNAME", "value": "postgres" },
-        { "key": "DATABASE_PASSWORD", "value": "${POSTGRES_PASSWORD}" },
-        { "key": "DATABASE_NAME", "value": "dawarich_production" },
-        { "key": "APPLICATION_HOSTS", "value": "${APP_DOMAIN},${APP_LOCAL_DOMAIN},${APP_HOST}:${APP_PORT}" },
-        { "key": "BACKGROUND_PROCESSING_CONCURRENCY", "value": "5" },
-        { "key": "APPLICATION_PROTOCOL", "value": "http" },
-        { "key": "PROMETHEUS_EXPORTER_ENABLED", "value": "false" },
-        { "key": "PROMETHEUS_EXPORTER_PORT", "value": "9394" },
-        { "key": "SECRET_KEY_BASE", "value": "${SECRET_KEY_BASE}" },
-        { "key": "OTP_ENCRYPTION_PRIMARY_KEY", "value": "${OTP_ENCRYPTION_PRIMARY_KEY}" },
-        { "key": "OTP_ENCRYPTION_DETERMINISTIC_KEY", "value": "${OTP_ENCRYPTION_DETERMINISTIC_KEY}" },
-        { "key": "OTP_ENCRYPTION_KEY_DERIVATION_SALT", "value": "${OTP_ENCRYPTION_KEY_DERIVATION_SALT}" },
-        { "key": "RAILS_LOG_TO_STDOUT", "value": "true" },
-        { "key": "SELF_HOSTED", "value": "true" },
-        { "key": "STORE_GEODATA", "value": "true" },
-        { "key": "STORAGE_BACKEND", "value": "${STORAGE_BACKEND}" },
-        { "key": "PHOTON_API_HOST", "value": "${PHOTON_API_HOST}" },
-        { "key": "PHOTON_API_KEY", "value": "${PHOTON_API_KEY}" },
-        { "key": "PHOTON_API_USE_HTTPS", "value": "${PHOTON_API_USE_HTTPS}" },
-        { "key": "GEOAPIFY_API_KEY", "value": "${GEOAPIFY_API_KEY}" },
-        { "key": "NOMINATIM_API_HOST", "value": "${NOMINATIM_API_HOST}" },
-        { "key": "NOMINATIM_API_KEY", "value": "${NOMINATIM_API_KEY}" },
-        { "key": "NOMINATIM_API_USE_HTTPS", "value": "${NOMINATIM_API_USE_HTTPS}" },
-        { "key": "SKIP_VISITS_FLEET_REDETECT", "value": "${SKIP_VISITS_FLEET_REDETECT}" }
-      ],
-      "logging": {
-        "driver": "json-file",
-        "options": {
-          "max-size": "100m",
-          "max-file": "5"
-        }
-      },
-      "healthCheck": {
-        "test": "pgrep -f sidekiq",
-        "interval": "10s",
-        "retries": 30,
-        "startPeriod": "30s",
-        "timeout": "10s"
-      },
-      "dependsOn": {
-        "dawarich_db": { "condition": "service_started" },
-        "dawarich_redis": { "condition": "service_started" },
-        "dawarich_app": { "condition": "service_started" }
       }
     }
   ]
