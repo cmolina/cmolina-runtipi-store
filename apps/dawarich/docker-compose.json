@@ -53,7 +53,7 @@
     },
     {
       "name": "dawarich_app",
-      "image": "freikin/dawarich:1.19.0",
+      "image": "freikin/dawarich:1.21.0",
       "isMain": true,
       "internalPort": 3000,
       "entrypoint": "web-entrypoint.sh",
