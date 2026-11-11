@@ -22,7 +22,14 @@
           "hostPath": "${APP_DATA_DIR}/data",
           "containerPath": "/app/data"
         }
-      ]
+      ],
+      "healthCheck": {
+        "test": "wget -q --spider http://127.0.0.1:7681/",
+        "interval": "10s",
+        "retries": 5,
+        "startPeriod": "10s",
+        "timeout": "10s"
+      }
     }
   ]
 }
