@@ -17,6 +17,13 @@
         {"key": "SHELFMARK_API_KEY", "value": "${SHELFMARK_API_KEY}"},
         {"key": "SHELFMARK_API_KEY_READONLY", "value": "${SHELFMARK_API_KEY_READONLY}"}
       ],
+      "healthCheck": {
+        "test": "curl -fsS http://127.0.0.1:8084/api/health",
+        "interval": "10s",
+        "retries": 5,
+        "startPeriod": "60s",
+        "timeout": "10s"
+      },
       "volumes": [
         {"hostPath": "${APP_DATA_DIR}/data/config", "containerPath": "/config"},
         {"hostPath": "${ROOT_FOLDER_HOST}/media/data/books", "containerPath": "/books"}

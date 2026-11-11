@@ -9,7 +9,14 @@
       "environment": [
         { "key": "PORT", "value": "8787" }
       ],
-      "restart": "unless-stopped"
+      "restart": "unless-stopped",
+      "healthCheck": {
+        "test": "wget -q --spider http://127.0.0.1:8787/",
+        "interval": "10s",
+        "retries": 5,
+        "startPeriod": "10s",
+        "timeout": "10s"
+      }
     }
   ]
 }
