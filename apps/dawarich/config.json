@@ -7,7 +7,7 @@
   "port": 3030,
   "categories": ["utilities", "network"],
   "description": "Dawarich is a self-hosted alternative to Google Location History. Track your location history, visualize it on a map, and have complete control over your data.",
-  "tipi_version": 39,
+  "tipi_version": 40,
   "version": "1.23.0",
   "source": "https://github.com/Freika/dawarich",
   "website": "https://dawarich.app",
